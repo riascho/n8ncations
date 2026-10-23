@@ -1,16 +1,15 @@
 import { defineConfig } from "vite";
 
-/* No routing config, on purpose. /n8ncation/<slug> is served by index.html
-   through Vite's default appType: "spa" fallback, which rewrites any page
-   request (GET, Accept: text/html) the server has no file for to
-   /index.html — in both `vite` and `vite preview`. Whatever host this ends
-   up on needs the same rule ("unknown path → index.html, status 200"), and
-   that is the only routing it needs.
+const configuredBase = process.env.VITE_BASE_PATH ?? "/";
+const base = configuredBase.endsWith("/")
+  ? configuredBase
+  : `${configuredBase}/`;
 
-   The dev port is pinned because it has to be registered as an authorised
-   JavaScript origin on the Google OAuth client; a shifting port would break
-   sign-in locally. */
+/* Vite's dev server and preview use the SPA fallback for routes such as
+   /me and /n8ncation/<slug>. Static hosts need an equivalent fallback. */
+
 export default defineConfig({
+  base,
   server: { port: 5173, strictPort: true },
   build: {
     outDir: "dist",

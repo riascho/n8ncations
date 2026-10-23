@@ -21,6 +21,7 @@ import {
 } from "./features/workations";
 import * as api from "./api/client";
 import { ApiError } from "./api/types";
+import { appPath } from "./paths";
 
 const { usingMock } = api;
 
@@ -175,7 +176,7 @@ function renderAuth(): void {
      other. */
   const chip = document.createElement("a");
   chip.className = "auth-user";
-  chip.href = "/me";
+  chip.href = appPath("/me");
   if (view === "me") {
     chip.setAttribute("aria-current", "page");
   }
@@ -207,7 +208,7 @@ function renderAuth(): void {
        from the main page itself: the next document boots signed out, so
        nothing private — trips, tallies, the email on /me — is left in the
        DOM behind a display: none. */
-    location.assign("/");
+    location.assign(appPath("/"));
   });
 
   slot.append(chip, out);

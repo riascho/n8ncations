@@ -15,6 +15,7 @@ import { ApiError } from "../api/types";
 import type { Workation } from "../api/types";
 import { isSignedIn } from "../auth";
 import { requireEl, template } from "../dom";
+import { appPath, assetPath, currentAppPath } from "../paths";
 
 const MONTHS = [
   "January",
@@ -144,7 +145,7 @@ function describe(error: unknown, fallback: string): string {
 }
 
 export function workationPath(trip: Workation): string {
-  return `/n8ncation/${encodeURIComponent(trip.slug)}`;
+  return appPath(`/n8ncation/${encodeURIComponent(trip.slug)}`);
 }
 
 /** Newest first, so the upcoming section leads with the nearest trip and the
@@ -180,7 +181,7 @@ function buildCard(trip: Workation, past: boolean): HTMLElement {
   const photo = card.querySelector("img");
   if (photo instanceof HTMLImageElement) {
     if (trip.imageUrl) {
-      photo.src = trip.imageUrl;
+      photo.src = assetPath(trip.imageUrl);
       photo.alt = trip.imageAlt;
       /* The upcoming card is the largest image above the fold. */
       if (!past) {
@@ -439,7 +440,7 @@ function fillDetail(root: HTMLElement, trip: Workation, past: boolean): void {
   const photo = root.querySelector("[data-detail-photo]");
   if (photo instanceof HTMLImageElement) {
     if (trip.imageUrl) {
-      photo.src = trip.imageUrl;
+      photo.src = assetPath(trip.imageUrl);
       photo.alt = trip.imageAlt;
     } else {
       photo.remove();
@@ -450,7 +451,7 @@ function fillDetail(root: HTMLElement, trip: Workation, past: boolean): void {
 /** Reads the slug off /n8ncation/<slug>. The "/n8ncation/" prefix also
     appears in the inline script in index.html that picks this view. */
 function slugFromLocation(): string {
-  const path = /^\/n8ncation\/([^/?#]+)/.exec(location.pathname);
+  const path = /^\/n8ncation\/([^/?#]+)/.exec(currentAppPath());
   if (!path?.[1]) {
     return "";
   }

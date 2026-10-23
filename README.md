@@ -65,13 +65,13 @@ Copy `.env.example` to **`.env.local`** (gitignored) and fill it in. Vite doesn'
 
 The build in `dist/` is plain static files. Any static host works, as long as:
 
-1. **It serves from the domain root.** Links and assets use absolute paths (`/`, `/me`, `/n8ncation/<slug>`, `/n8n-logo-black-accent.svg`). Serving from a sub-path would need a Vite `base` setting and path changes in the code.
+1. **It serves from the domain root or its configured base path.** Set Vite's `base` to the deployment path when serving from a sub-path.
 2. **Unknown paths fall back to `index.html` with status 200.** That rule is the whole router: `/me` and `/n8ncation/<slug>` have no files of their own. `vite` and `vite preview` already behave this way.
 3. **The site's origin is an authorized JavaScript origin** on the Google OAuth client, and the n8n OAuth workflow redirects back to that origin (see [Auth setup checklist](#auth-setup-checklist)).
 
 ### GitHub Pages
 
-`.github/workflows/deploy-pages.yml` builds and deploys the site with GitHub Actions when the default branch is updated. It also publishes `dist/index.html` as `dist/404.html` so GitHub Pages can load the app shell for deep links. Those responses still have HTTP status 404.
+`.github/workflows/deploy-pages.yml` builds and deploys the site with GitHub Actions when the default branch is updated. It reads the Pages base path from `configure-pages`, so the same build works at a repository URL or a custom domain. It also publishes `dist/index.html` as `dist/404.html` so GitHub Pages can load the app shell for deep links. Those responses still have HTTP status 404.
 
 To enable deployment:
 
@@ -85,7 +85,7 @@ To enable deployment:
 
 These Vite variables are included in the browser bundle; do not put secrets in them. The Google client ID and endpoint URLs are public configuration, not credentials.
 
-The workflow can publish a repository project site at `https://<owner>.github.io/<repository>/`, but the app currently assumes it is hosted at the domain root: its assets and links are root-relative, and its route matching does not remove a repository prefix. Therefore, the initial project-site deployment will need a separate path-prefix change before the app works there. A custom domain serving the app at `/` avoids that change.
+The workflow supports a repository project site at `https://<owner>.github.io/<repository>/` as well as a custom domain. App links, assets, and route matching use the configured base path. Live OAuth also requires updating the Google authorized JavaScript origin and the n8n workflow's redirect destination to match the deployed site URL.
 
 ---
 

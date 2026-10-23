@@ -13,7 +13,11 @@
     <title>n8ncation — n8n workations</title>
     <!-- Official symbol from the n8n brand portal. The symbol alone is the
          right mark for a favicon; never draw or approximate a substitute. -->
-    <link rel="icon" type="image/svg+xml" href="/n8n-symbol-accent.svg" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="%BASE_URL%n8n-symbol-accent.svg"
+    />
     <!-- This one file serves /, /n8ncation/<slug> and /me: every unknown path
          falls back to index.html (Vite's default SPA fallback in dev and
          preview, and what any future host has to be configured to do), so
@@ -26,7 +30,16 @@
          this never runs, and the stylesheet falls back to the home view. -->
     <script>
       (function () {
+        var base = "%BASE_URL%";
         var path = location.pathname;
+        if (base !== "/") {
+          var prefix = base.slice(0, -1);
+          if (path === prefix) {
+            path = "/";
+          } else if (path.indexOf(prefix + "/") === 0) {
+            path = path.slice(prefix.length);
+          }
+        }
         document.documentElement.dataset.view =
           path === "/me" || path === "/me/"
             ? "me"
@@ -47,19 +60,19 @@
       >Skip to your profile</a
     >
     <header class="header">
-      <a class="brand" href="/" aria-label="n8ncation home"
+      <a class="brand" href="%BASE_URL%" aria-label="n8ncation home"
         ><img
           class="n8n-logo"
-          src="/n8n-logo-black-accent.svg"
+          src="%BASE_URL%n8n-logo-black-accent.svg"
           alt="n8n"
           width="120"
           height="24"
         /><span class="brand-divider"></span><span>n8ncation</span></a
       >
       <nav aria-label="Main navigation">
-        <a href="/#workations" data-private>Workations</a
-        ><a href="/#polls" data-private>Vote</a
-        ><a href="/#about">What to expect</a>
+        <a href="%BASE_URL%#workations" data-private>Workations</a
+        ><a href="%BASE_URL%#polls" data-private>Vote</a
+        ><a href="%BASE_URL%#about">What to expect</a>
       </nav>
       <div class="auth" data-auth></div>
     </header>
@@ -382,10 +395,10 @@
       </section>
     </main>
     <footer class="wrap">
-      <a class="brand" href="#" aria-label="Back to top"
+      <a class="brand" href="%BASE_URL%#" aria-label="Back to top"
         ><img
           class="n8n-logo"
-          src="/n8n-logo-black-accent.svg"
+          src="%BASE_URL%n8n-logo-black-accent.svg"
           alt="n8n"
           width="120"
           height="24"

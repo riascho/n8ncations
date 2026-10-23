@@ -21,16 +21,20 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
+
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v6
 
       - name: Install dependencies
         run: npm ci
@@ -41,18 +45,16 @@ jobs:
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_OAUTH_REDIRECT: ${{ vars.VITE_OAUTH_REDIRECT }}
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+          VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
 
       - name: Add GitHub Pages deep-link fallback
         run: cp dist/index.html dist/404.html
 
       - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
       - name: Deploy site
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
