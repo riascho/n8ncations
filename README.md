@@ -17,7 +17,7 @@ The UI follows the post-rebrand n8n design system described in [`n8ndesign.md`](
 ┌──────────────────────────┐   fetch (JSON)    ┌──────────────────────────┐        ┌──────────────────┐
 │ Static site              │ ────────────────▶ │ n8n workflow             │ ─────▶ │ n8n Data Tables  │
 │ Vite + TypeScript,       │  Bearer <JWT> on  │ "API endpoints"          │        │ workations,      │
-│ no framework             │  private routes   │ (one webhook per route)  │        │ signups, votes,  │
+│ no framework             │  every route      │ (one webhook per route)  │        │ signups, votes,  │
 └────────────┬─────────────┘                   └──────────────────────────┘        │ poll_options,    │
              │ sign-in (popup)                 ┌──────────────────────────┐        │ profiles         │
              ▼                                 │ n8n workflow             │ ─────▶ │                  │
@@ -95,7 +95,7 @@ The workflow can publish a repository project site at `https://<owner>.github.io
 index.html              All views' markup, <template>s, and the inline view picker
 public/                 Static assets copied as-is (official n8n logo + symbol)
 src/
-  main.ts               Boot: handles the sign-in return, renders the auth chip, mounts the current view
+  main.ts               Boot: handles the sign-in return, sets data-session, renders the auth chip and banner, mounts the current view once signed in
   auth.ts               Google sign-in (popup + redirect fallback), session storage, JWT decoding for display
   dom.ts                template() / requireEl() helpers
   api/
@@ -115,18 +115,19 @@ src/
 
 **Views.** There are three, all served by `index.html`:
 
-| Path                | View     | What it shows                                           |
+| Path                | View     | What it shows when signed in                            |
 | ------------------- | -------- | ------------------------------------------------------- |
 | `/`                 | `home`   | Upcoming and past trips, "What to expect", the polls    |
 | `/n8ncation/<slug>` | `detail` | One trip with the RSVP button                           |
 | `/me`               | `me`     | Your profile (editable team + job title) and your trips |
 
-A small inline script in `<head>` sets `<html data-view="…">` before first paint. CSS hides every element whose `data-only` doesn't match the view, and `main.ts` reads `data-view` to decide what to mount. Elements are found through `data-*` hooks, and repeated items (trip cards, poll cards, options, rows) are cloned from `<template>`s.
+A small inline script in `<head>` sets `<html data-view="…">` before first paint. CSS hides every element whose `data-only` doesn't match the view, and `main.ts` reads `data-view` to decide what to mount. In the same way, `main.ts` sets `<html data-session="signed-in|signed-out">` at boot: elements marked `data-private` only show signed in, and elements marked `data-signed-out` (the banner) only show signed out. Before that runs, neither shows. Elements are found through `data-*` hooks, and repeated items (trip cards, poll cards, options, rows) are cloned from `<template>`s.
 
 **Conventions worth keeping:**
 
 - Feature modules don't import each other. Shared data goes through `main.ts`, which on `/me` loads `GET /me` and `GET /workations` once and passes them to both `profile.ts` and `workations.ts`.
 - Every network call goes through `src/api/client.ts`. Each function there has a matching function in `mock.ts`, and both are typed by `types.ts`.
+- Trips, polls, votes and profiles are private: their markup carries `data-private`, and they're only mounted from `mountView()` in `main.ts` once someone is signed in.
 - Writes (votes, suggestions, RSVPs, profile saves) are optimistic. The UI updates right away, rolls back if the request fails, and locks the control while the request is in flight. The lock matters because Data Table upserts aren't atomic (see [Scaling](#scaling-to-500-users)).
 - All server and user content is inserted with `textContent`, never `innerHTML`.
 - Upcoming vs. past is computed from `endDate` against the reader's local date. There's no status column to keep in sync.
@@ -148,7 +149,7 @@ Sign-in uses Google OAuth 2.0 (authorization code flow), with an n8n workflow as
    4. signs a session JWT (JWT node, `jwtAuth` credential) with claims `sub`, `email`, `name`, `picture`, `iat` and `exp` (**30 days**)
    5. redirects to `<site-origin>/#session=<jwt>&state=<state>`
 4. Back on the site, the popup passes the fragment to its opener with `postMessage` (same origin only) and closes. The opener checks `state` against `sessionStorage` (CSRF protection), checks `exp`, and stores the JWT in `localStorage` under `n8ncation.session.v1`. The redirect fallback does the same checks on page load and then returns to the page where sign-in started.
-5. Private API calls send `Authorization: Bearer <jwt>`. Each private webhook uses **JWT Auth** with the same `jwtAuth` credential, and the workflows take the user's identity only from `jwtPayload.sub`.
+5. Every API call sends `Authorization: Bearer <jwt>`. Every API webhook uses **JWT Auth** with the same `jwtAuth` credential, and the workflows take the user's identity only from `jwtPayload.sub`.
 
 The frontend decodes the JWT only to show the name and avatar. It never verifies it; n8n does. Signing out just deletes the stored token.
 
@@ -162,7 +163,7 @@ When moving to a new Google client, n8n instance or site URL:
 - **n8n "Google OAuth Login" workflow:**
   - "request access_token" node: `client_id`, `client_secret` and `redirect_uri`. The `redirect_uri` must be the same callback URL.
   - "Success" node: the redirect URL must start with the site origin the user should return to.
-- **n8n `jwtAuth` credential (HS256 secret):** the JWT node and every private webhook must use the same credential. Rotating the secret signs everyone out.
+- **n8n `jwtAuth` credential (HS256 secret):** the JWT node and every API webhook must use the same credential. Rotating the secret signs everyone out.
 - **Frontend:** `VITE_GOOGLE_CLIENT_ID` and `VITE_OAUTH_REDIRECT`, then rebuild.
 
 ---
@@ -173,8 +174,8 @@ All routes live in the **"API endpoints"** workflow. Each one is a Webhook node 
 
 | Method | Path           | Auth | Request body                                         | Response                                                                                              | Tables                                         |
 | ------ | -------------- | ---- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| GET    | `/workations`  | —    | —                                                    | `200 { workations: Workation[] }`                                                                     | `workations`, `signups`, `profiles` (read)     |
-| GET    | `/polls`       | —    | —                                                    | `200 { polls: [{ pollId, voters, options: [{ value, count, suggested }] }] }`                         | `votes`, `poll_options` (read)                 |
+| GET    | `/workations`  | JWT  | —                                                    | `200 { workations: Workation[] }`                                                                     | `workations`, `signups`, `profiles` (read)     |
+| GET    | `/polls`       | JWT  | —                                                    | `200 { polls: [{ pollId, voters, options: [{ value, count, suggested }] }] }`                         | `votes`, `poll_options` (read)                 |
 | GET    | `/me`          | JWT  | —                                                    | `200 { sub, name, email, picture, team, jobTitle, votes: { [pollId]: string[] }, signups: string[] }` | `profiles`, `signups`, `votes` (read)          |
 | POST   | `/me`          | JWT  | `{ team: string \| null, jobTitle: string \| null }` | no body                                                                                               | `profiles` (update)                            |
 | POST   | `/rsvp`        | JWT  | `{ workationId: string, attending: boolean }`        | `200` on sign-up, `204` on cancel                                                                     | `workations` (read), `signups` (upsert/delete) |
@@ -185,7 +186,7 @@ All routes live in the **"API endpoints"** workflow. Each one is a Webhook node 
 
 **Behavior per route:**
 
-- **`GET /workations`** joins each trip with its signup count (distinct `user_sub`s) and resolves `organizer` against `profiles`. It's public, so it returns counts only, never who signed up. Dates are truncated to `YYYY-MM-DD`. The frontend uses this one list for the home page, the detail page (matched by `slug`) and `/me`.
+- **`GET /workations`** joins each trip with its signup count (distinct `user_sub`s) and resolves `organizer` against `profiles`. It returns counts only, never who signed up. Dates are truncated to `YYYY-MM-DD`. The frontend uses this one list for the home page, the detail page (matched by `slug`) and `/me`.
 - **`GET /polls`** keeps only the newest vote row per (poll, user) by `updatedAt`, in case a race created duplicates. `voters` counts people with at least one selection. `suggested` is true for any option not seeded (`created_by_sub !== "seed"`).
 - **`GET /me` / `POST /me`** share one webhook with _Allow Multiple HTTP Methods_. GET reads the caller's profile, signups and votes. POST updates only `team` and `jobTitle`; name, email and picture are rewritten from Google on every sign-in.
 - **`POST /rsvp`** checks that the trip exists and that today is before its `end_date`. Then it upserts a `signups` row (`attending: true`) or deletes it (`attending: false`).
@@ -296,16 +297,16 @@ Use mock mode to build or review UI without touching real data. When the API con
 
 **Add an API endpoint**
 
-1. In n8n: add a Webhook node (with JWT Auth and the `jwtAuth` credential if it's private) and a Respond to Webhook node. Take identity from `jwtPayload.sub`, never from the body. n8n allows one webhook per path and method; use _Allow Multiple HTTP Methods_ to share a path.
+1. In n8n: add a Webhook node (with JWT Auth and the `jwtAuth` credential; every route is private) and a Respond to Webhook node. Take identity from `jwtPayload.sub`, never from the body. n8n allows one webhook per path and method; use _Allow Multiple HTTP Methods_ to share a path.
 2. Add the request/response types to `src/api/types.ts`.
-3. Add a function to `src/api/client.ts`, using `request(path, init, authenticated)`.
-4. Add the matching function to `src/api/mock.ts`.
+3. Add a function to `src/api/client.ts`, using `request(path, init, true)`.
+4. Add the matching function to `src/api/mock.ts`, starting with `requireUser()`.
 
 **Add a page/view**
 
 1. Extend the inline view picker in `index.html` with the new path.
-2. Add the markup with `data-only="<view>"` and `data-*` hooks (and any `<template>`s).
-3. Put the logic in a new `src/features/<name>.ts` and add a branch for the view in `boot()` in `src/main.ts`. If it depends on who is signed in, hook it into `onAuthChange()`.
+2. Add the markup with `data-only="<view>"` and `data-*` hooks (and any `<template>`s). Add `data-private` to anything that loads API data.
+3. Put the logic in a new `src/features/<name>.ts` and add a branch for the view in `mountView()` in `src/main.ts`. It runs once, after boot or after sign-in, and only when signed in.
 
 **Add a profile field**
 
@@ -319,14 +320,14 @@ Add the column to `profiles`, then update the `POST /me` "Update row(s)" node an
 
 The frontend is static, so it isn't the bottleneck. Data volume stays small at 500 users: about 500 `profiles` rows, up to about 1,000 `votes` rows (two polls), and a few hundred `signups` per trip. The limit is **n8n executions**, because every API call is one workflow execution.
 
-**Load per page view:** home makes 2 calls (`/workations`, `/polls`), plus `/me` when signed in. The detail page and `/me` make 2 each. Each vote or RSVP adds one write. A launch announcement to all 500 people could mean around 1,500 executions within minutes.
+**Load per page view:** signed out, no view makes any calls. Signed in, home makes 3 calls (`/workations`, `/polls`, `/me`), and the detail page and `/me` make 2 each. Each vote or RSVP adds one write. A launch announcement to all 500 people could mean around 1,500 executions within minutes.
 
 Things to watch as usage grows, roughly in order:
 
 1. **`GET /polls` query fan-out.** "Get options" runs once per vote row (it's fed by "Get votes"), so the number of Data Table queries grows with the number of votes. Fetch `poll_options` once instead, for example as a parallel branch merged before the Code node.
-2. **`GET /workations` reads all of `profiles`** on every public call just to resolve organizer names. Filter to the organizer subs, or store the organizer's display name on the trip.
+2. **`GET /workations` reads all of `profiles`** on every call just to resolve organizer names. Filter to the organizer subs, or store the organizer's display name on the trip.
 3. **Concurrency.** Webhook executions queue under the instance's concurrency limit, so a burst slows every endpoint, including sign-in. Options:
-   - cache the two public GETs (they change rarely)
+   - cache the results of `GET /workations` and `GET /polls` inside the workflow (they change rarely). They need a JWT, so a shared CDN cache in front of them doesn't fit
    - combine `GET /workations` and `GET /polls` into one call for the home page
    - move the API to its own instance or queue-mode workers
 4. **Non-atomic upserts.** A Data Table upsert is "update, else insert" with no unique index, so two overlapping writes for the same person can both insert. The frontend locks the control during a write, and `GET /polls` keeps only the newest row per person. Any new write endpoint needs the same care.

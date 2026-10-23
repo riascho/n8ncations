@@ -355,19 +355,18 @@ function applyResults(
   }
 }
 
-export async function refresh(): Promise<void> {
-  /* Signing in or out calls this on every view, including the n8ncation
-     detail view, which never mounts any polls. Without the guard it would
-     fetch a tally it has nowhere to show. */
+async function refresh(): Promise<void> {
+  /* Nothing to fill before mountPolls() has built the cards. */
   if (views.size === 0) {
     return;
   }
 
   const signedIn = isSignedIn();
 
-  /* Run before the first await, so signing out drops the highlights straight
-     away instead of leaving them lit for a round trip. The tallies keep those
-     votes — they just stop being marked as yours. */
+  /* Polls only mount once signed in, but the session can lapse before a
+     resync. Run before the first await, so the highlights drop straight away
+     instead of staying lit for a round trip. The tallies keep those votes —
+     they just stop being marked as yours. */
   if (!signedIn) {
     for (const view of views.values()) {
       if (view.mine.size > 0) {
@@ -434,7 +433,7 @@ export async function refresh(): Promise<void> {
       }
     } catch (error) {
       if (error instanceof ApiError && error.isAuthFailure) {
-        /* Session lapsed; reads still worked, so leave the tallies on screen. */
+        /* Session lapsed between the two reads; leave the tallies on screen. */
         return;
       }
     }

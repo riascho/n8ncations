@@ -366,8 +366,8 @@ interface DetailView {
   busy: boolean;
 }
 
-/* Module scope so signing in or out can re-read the RSVP state without the
-   page shell needing a handle on it — the same arrangement polls.ts uses. */
+/* Module scope so refreshRsvp() can re-read the RSVP state without the page
+   shell needing a handle on it — the same arrangement polls.ts uses. */
 let detail: DetailView | null = null;
 
 function renderRsvp(v: DetailView): void {
@@ -531,18 +531,18 @@ export async function mountWorkationDetail(root: HTMLElement): Promise<void> {
 }
 
 /* Whether you are already on the list is your own state, so it comes from /me
-   rather than from the public list, which returns counts only. Called after
-   the card is already on screen — the trip details must never wait on an
-   authenticated call. */
-export async function refreshRsvp(): Promise<void> {
+   rather than from the trip list, which returns counts only. Called after
+   the card is already on screen, so the trip details never wait on a second
+   request. */
+async function refreshRsvp(): Promise<void> {
   const view = detail;
   if (!view) {
     return;
   }
 
   if (!isSignedIn()) {
-    /* Signing out drops the highlight straight away. The count keeps the
-       RSVP; it just stops being marked as yours. */
+    /* The session lapsed after the card loaded. The count keeps the RSVP; it
+       just stops being marked as yours. */
     view.going = false;
     renderRsvp(view);
     return;
@@ -554,7 +554,7 @@ export async function refreshRsvp(): Promise<void> {
     renderRsvp(view);
   } catch (error) {
     if (error instanceof ApiError && error.isAuthFailure) {
-      /* Session lapsed. The card is public, so leave it up. */
+      /* Session lapsed. The card already loaded, so leave it up. */
       return;
     }
   }

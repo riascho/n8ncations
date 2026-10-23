@@ -1,4 +1,4 @@
-/* The only place that talks to n8n. Reads are anonymous; writes carry the
+/* The only place that talks to n8n. Every route, reads included, carries the
    session JWT, which n8n verifies itself via the webhook's JWT Auth option.
 
    With VITE_API_BASE unset the whole module falls through to the in-memory
@@ -95,13 +95,15 @@ async function describeFailure(response: Response): Promise<string> {
 }
 
 export function getPolls(): Promise<PollsResponse> {
-  return usingMock ? mock.getPolls() : request<PollsResponse>("/polls");
+  return usingMock
+    ? mock.getPolls()
+    : request<PollsResponse>("/polls", {}, true);
 }
 
 export function getWorkations(): Promise<WorkationsResponse> {
   return usingMock
     ? mock.getWorkations()
-    : request<WorkationsResponse>("/workations");
+    : request<WorkationsResponse>("/workations", {}, true);
 }
 
 export function getMe(): Promise<Me> {

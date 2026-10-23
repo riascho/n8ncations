@@ -119,6 +119,7 @@ function rowsFor(pollId: string): VoteRow[] {
 }
 
 export function getPolls(): Promise<PollsResponse> {
+  requireUser();
   const polls: PollResult[] = POLLS.map((config) => {
     const rows = rowsFor(config.id);
     const suggested = suggestedOptions[config.id] ?? [];
@@ -138,6 +139,7 @@ export function getPolls(): Promise<PollsResponse> {
 }
 
 export function getWorkations(): Promise<WorkationsResponse> {
+  requireUser();
   return delay({
     workations: workationRows.map((row) => ({
       ...row,

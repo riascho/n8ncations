@@ -39,11 +39,12 @@ export interface Workation {
   attendees: number;
   /** Who runs the trip, or null when nobody is named. The workflow resolves
       the `organizer` sub against `profiles` and sends display fields only:
-      this endpoint is public, so never the sub and never the email. */
+      every signed-in colleague gets the same list, so never the sub and never
+      the email. */
   organizer: Organizer | null;
 }
 
-/** Public display fields for a trip's organizer. Only `name` is read. */
+/** Display fields for a trip's organizer. Only `name` is read. */
 export interface Organizer {
   name: string;
 }
@@ -62,8 +63,8 @@ export interface Me {
   /** pollId -> the option values this person selected. */
   votes: Record<string, string[]>;
   /** workationIds this person has RSVP'd to. Own state belongs on /me for the
-      same reason votes do: GET /workations is public and returns counts only,
-      so it can never say who is going. */
+      same reason votes do: GET /workations is the same for everyone and
+      returns counts only, so it can never say who is going. */
   signups: string[];
 }
 

@@ -104,6 +104,15 @@ li {
   display: none;
 }
 
+/* Trips, polls and profiles are for signed-in colleagues only. src/main.ts
+   sets data-session on <html> at boot. Both rules are written with :not, so
+   until it runs — and with JavaScript off — neither side shows: private
+   content cannot flash for a visitor, nor the banner for a colleague. */
+:root:not([data-session="signed-in"]) [data-private],
+:root:not([data-session="signed-out"]) [data-signed-out] {
+  display: none;
+}
+
 /* ----------------------------------------------------------------
    Capsules — §2.2, standalone style
 
@@ -801,6 +810,41 @@ li {
 }
 
 /* ----------------------------------------------------------------
+   Sign-in banner, signed out only
+
+   Accent Pink fill with Type/Primary: Core Black on Main Accent Pink is
+   8.29:1. The button keeps its grey Interactive Primary fill.
+   ---------------------------------------------------------------- */
+
+.signin-banner {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-16);
+  margin-top: var(--space-64);
+  padding: var(--space-32);
+  border-radius: var(--radius-lg);
+  background: var(--background-accent-pink);
+  color: var(--type-primary);
+}
+
+/* heading-sm */
+.signin-banner h2 {
+  font-size: 28px;
+  line-height: 32px;
+}
+
+/* body-lg */
+.signin-banner p {
+  max-width: 640px;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.signin-banner .auth-button {
+  margin-top: var(--space-8);
+}
+
+/* ----------------------------------------------------------------
    What to expect
    ---------------------------------------------------------------- */
 
@@ -1387,6 +1431,11 @@ footer > span {
   .poll-grid {
     grid-template-columns: 1fr;
     margin-top: var(--space-16);
+  }
+
+  .signin-banner {
+    margin-top: var(--space-48);
+    padding: var(--space-24);
   }
 
   .about {

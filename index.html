@@ -37,11 +37,15 @@
     </script>
   </head>
   <body>
-    <a class="skip" href="#workations" data-only="home">Skip to workations</a>
-    <a class="skip" href="#workation" data-only="detail"
+    <a class="skip" href="#workations" data-only="home" data-private
+      >Skip to workations</a
+    >
+    <a class="skip" href="#workation" data-only="detail" data-private
       >Skip to the n8ncation</a
     >
-    <a class="skip" href="#profile" data-only="me">Skip to your profile</a>
+    <a class="skip" href="#profile" data-only="me" data-private
+      >Skip to your profile</a
+    >
     <header class="header">
       <a class="brand" href="/" aria-label="n8ncation home"
         ><img
@@ -53,7 +57,8 @@
         /><span class="brand-divider"></span><span>n8ncation</span></a
       >
       <nav aria-label="Main navigation">
-        <a href="/#workations">Workations</a><a href="/#polls">Vote</a
+        <a href="/#workations" data-private>Workations</a
+        ><a href="/#polls" data-private>Vote</a
         ><a href="/#about">What to expect</a>
       </nav>
       <div class="auth" data-auth></div>
@@ -64,6 +69,7 @@
         class="trip-state wrap"
         data-detail-state
         data-only="detail"
+        data-private
         role="status"
       >
         Loading this n8ncation…
@@ -80,6 +86,7 @@
         id="workation"
         data-detail
         data-only="detail"
+        data-private
         aria-labelledby="detail-title"
         hidden
       >
@@ -126,6 +133,7 @@
         id="profile"
         data-me
         data-only="me"
+        data-private
         aria-labelledby="profile-title"
       >
         <p class="trip-state" data-me-state role="status">
@@ -179,6 +187,7 @@
       <section
         class="workations wrap"
         data-only="me"
+        data-private
         data-my-trips
         aria-labelledby="my-upcoming-title"
         hidden
@@ -191,6 +200,7 @@
       <section
         class="past wrap"
         data-only="me"
+        data-private
         data-my-trips
         aria-labelledby="my-past-title"
         hidden
@@ -207,10 +217,25 @@
           The ultimate remote work and vacation experience for the n8n team!
         </p>
       </section>
+      <!-- Shown on every view while signed out, in place of everything marked
+           data-private. The button is wired up by src/main.ts. -->
+      <section
+        class="signin-banner wrap"
+        data-signed-out
+        aria-labelledby="signin-title"
+      >
+        <h2 id="signin-title">Sign in to see n8ncations</h2>
+        <p>
+          Use your n8n account to see upcoming and past n8ncations, RSVP, and
+          vote on where we go next.
+        </p>
+        <button class="auth-button" type="button" data-signin>Sign in</button>
+      </section>
       <section
         class="workations wrap"
         id="workations"
         data-only="home"
+        data-private
         aria-labelledby="upcoming-title"
       >
         <div class="section-heading">
@@ -264,6 +289,7 @@
         class="polls wrap"
         id="polls"
         data-only="home"
+        data-private
         aria-labelledby="polls-title"
       >
         <div class="section-heading">
@@ -342,7 +368,12 @@
           </button>
         </li>
       </template>
-      <section class="past wrap" data-only="home" aria-labelledby="past-title">
+      <section
+        class="past wrap"
+        data-only="home"
+        data-private
+        aria-labelledby="past-title"
+      >
         <div class="section-heading">
           <h2 id="past-title">Past n8ncations</h2>
           <span class="count" data-past-count>00</span>

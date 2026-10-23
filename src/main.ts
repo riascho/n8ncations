@@ -12,12 +12,11 @@ import {
   signOut,
   takeReturnPath,
 } from "./auth";
-import { mountPolls, refresh } from "./features/polls";
+import { mountPolls } from "./features/polls";
 import { clearProfile, mountProfile, showProfile } from "./features/profile";
 import {
   mountWorkationDetail,
   mountWorkations,
-  refreshRsvp,
   renderMyWorkations,
 } from "./features/workations";
 import * as api from "./api/client";
@@ -35,17 +34,56 @@ function el<T extends HTMLElement>(selector: string): T | null {
   return document.querySelector<T>(selector);
 }
 
-/* Everything that depends on who is signed in. Each call is a no-op on a page
-   that never mounted the thing it refreshes. */
-function onAuthChange(): void {
-  void refresh();
-  void refreshRsvp();
-  void loadMe();
+/* Read by the data-private / data-signed-out rules in styles.css. */
+function setSession(signedIn: boolean): void {
+  document.documentElement.dataset["session"] = signedIn
+    ? "signed-in"
+    : "signed-out";
 }
 
-/* Bumped on every /me load, so a response that lands after a sign-out — or
-   after a newer load — is dropped instead of putting an email address back
-   on screen. */
+/* Runs after a sign-in. Signed out, nothing was mounted or fetched, so this
+   is where the page's first loads happen, without a reload. Signing out
+   never comes through here: it reloads the page instead (see renderAuth). */
+function onAuthChange(): void {
+  setSession(true);
+  renderAuth();
+  mountView();
+}
+
+/* The header button and the banner's button share this. */
+function signIn(button: HTMLButtonElement): void {
+  /* Without an API base there is no callback webhook to come back from, so
+     the real Google round trip cannot complete. Mint a local session
+     instead, so the polls are still driveable. */
+  if (usingMock) {
+    try {
+      signInAsDemo();
+      onAuthChange();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Sign-in failed.");
+    }
+    return;
+  }
+
+  notify("");
+  button.disabled = true;
+  beginLogin()
+    .then(() => {
+      notify("");
+      onAuthChange();
+    })
+    .catch((error: unknown) => {
+      button.disabled = false;
+      notify(error instanceof Error ? error.message : "Sign-in failed.");
+    });
+}
+
+function signInLabel(): string {
+  return usingMock ? "Sign in (demo)" : "Sign in";
+}
+
+/* Bumped on every /me load, so a response that lands after a newer load is
+   dropped instead of overwriting it. */
 let meLoad = 0;
 
 /* /me needs two responses: your own state from GET /me, and the trip details
@@ -79,6 +117,7 @@ async function loadMe(): Promise<void> {
     showState(message);
   };
 
+  /* Only mounted once signed in, but a session can lapse in between. */
   if (!isSignedIn()) {
     showNothing("Sign in with your n8n account to see your profile.");
     return;
@@ -123,34 +162,9 @@ function renderAuth(): void {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "auth-button";
-    /* Without an API base there is no callback webhook to come back from, so
-       the real Google round trip cannot complete. Mint a local session
-       instead, so the polls are still driveable. */
-    button.textContent = usingMock ? "Sign in (demo)" : "Sign in";
+    button.textContent = signInLabel();
     button.addEventListener("click", () => {
-      if (usingMock) {
-        try {
-          signInAsDemo();
-          renderAuth();
-          onAuthChange();
-        } catch (error) {
-          notify(error instanceof Error ? error.message : "Sign-in failed.");
-        }
-        return;
-      }
-
-      notify("");
-      button.disabled = true;
-      beginLogin()
-        .then(() => {
-          notify("");
-          renderAuth();
-          onAuthChange();
-        })
-        .catch((error: unknown) => {
-          button.disabled = false;
-          notify(error instanceof Error ? error.message : "Sign-in failed.");
-        });
+      signIn(button);
     });
     slot.appendChild(button);
     return;
@@ -189,17 +203,11 @@ function renderAuth(): void {
   out.textContent = "Sign out";
   out.addEventListener("click", () => {
     signOut();
-    /* Signing out always lands on the main page. A full navigation rather
-       than re-rendering in place: the next document boots signed out, so
-       nothing personal — the email on /me, an RSVP highlight — survives from
-       this one. On the main page itself there is nowhere to go, so it just
-       re-renders. */
-    if (view !== "home") {
-      location.assign("/");
-      return;
-    }
-    renderAuth();
-    onAuthChange();
+    /* Signing out always lands on the main page, as a full navigation even
+       from the main page itself: the next document boots signed out, so
+       nothing private — trips, tallies, the email on /me — is left in the
+       DOM behind a display: none. */
+    location.assign("/");
   });
 
   slot.append(chip, out);
@@ -241,13 +249,39 @@ function boot(): void {
     notify("");
   }
 
+  setSession(isSignedIn());
   renderAuth();
+
+  const banner = el<HTMLButtonElement>("[data-signin]");
+  if (banner) {
+    banner.textContent = signInLabel();
+    banner.addEventListener("click", () => {
+      signIn(banner);
+    });
+  }
 
   if (usingMock) {
     notify(
       "Demo data: VITE_API_BASE is not set, so votes and RSVPs are in-memory and reset on reload.",
     );
   }
+
+  /* Signed out, every view is the intro, "What to expect" and the banner:
+     nothing to mount and nothing to fetch until signIn() succeeds. */
+  if (isSignedIn()) {
+    mountView();
+  }
+}
+
+/* Set once the view has mounted, so a second sign-in in the same document
+   cannot mount it twice. */
+let mounted = false;
+
+function mountView(): void {
+  if (mounted) {
+    return;
+  }
+  mounted = true;
 
   /* Mount only the current view: mounting on hooks alone would fetch polls
      behind a trip card. */
