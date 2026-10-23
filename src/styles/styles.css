@@ -1,0 +1,1498 @@
+/* n8ncation — landing page styles.
+
+   Built in Light mode (n8ndesign.md §3), the brand default. Every colour
+   comes from the Light semantic tokens in tokens.css, every size from the
+   type scale (§1.2), every space from the rule of 8 (§1.3) and every radius
+   from the radius tokens (§1.4).
+
+   The cross grid (§4) is used to work out positions and is deliberately not
+   drawn anywhere. The dot grid is the visible device, and it steps at 24px
+   so it stays in sync with the 8px grid. */
+
+/* ----------------------------------------------------------------
+   Base
+   ---------------------------------------------------------------- */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: var(--space-32);
+}
+
+body {
+  margin: 0;
+  color: var(--type-primary);
+  background: var(--background-primary);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-regular);
+  /* §1.2: standard ligatures are on wherever Baumer is used. */
+  font-feature-settings: "liga" 1;
+  font-size: 16px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+/* §1.2: even line lengths in headlines, no orphans in body copy. */
+h1,
+h2,
+h3 {
+  font-weight: var(--weight-medium);
+  text-wrap: balance;
+}
+
+p,
+li {
+  text-wrap: pretty;
+}
+
+/* ----------------------------------------------------------------
+   Layout helpers
+   ---------------------------------------------------------------- */
+
+.wrap {
+  max-width: 1160px;
+  width: calc(100% - var(--space-96));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Skip link: parked off-screen until it takes focus. */
+.skip {
+  position: absolute;
+  left: var(--space-24);
+  top: -80px;
+  z-index: 5;
+  padding: var(--space-16);
+  border-radius: var(--radius-sm);
+  background: var(--background-secondary);
+}
+
+.skip:focus {
+  top: var(--space-12);
+}
+
+/* One document holds both views; the inline script in index.html sets
+   data-view on <html> before first paint. display: none rather than
+   [hidden], so the hidden view also leaves the accessibility tree and the
+   page never announces two h1s. The detail and me rules are written with
+   :not so that with JavaScript off — data-view never set — the home page is
+   what shows. */
+[data-view="detail"] [data-only="home"],
+[data-view="me"] [data-only="home"],
+:root:not([data-view="detail"]) [data-only="detail"],
+:root:not([data-view="me"]) [data-only="me"] {
+  display: none;
+}
+
+/* ----------------------------------------------------------------
+   Capsules — §2.2, standalone style
+
+   Every capsule on this page sits on its own rather than in a row, so they
+   all take the standalone treatment: crosshairs just outside the corners.
+   The connected (node dot) style is not used anywhere here, because the
+   brand forbids mixing the two styles within one layout.
+
+   The crosshair colour is Stroke + Crosshairs/Secondary (Gray 25). It is
+   inlined in the data URI below because a CSS custom property cannot be
+   interpolated into one; the page is Light mode only, so there is a single
+   value to carry.
+   ---------------------------------------------------------------- */
+
+.capsule,
+.photo-label,
+.status,
+.count {
+  position: relative;
+  display: inline-block;
+  padding: var(--space-8) var(--space-16);
+  border-radius: var(--radius-full);
+  background: var(--background-secondary);
+  color: var(--type-primary);
+  /* body-md/mono — mono text is always ALL CAPS. */
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: var(--weight-regular);
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The leading, most important capsule takes the pink fill — here, the
+   location sitting on the photo. Core Black on Main Accent Pink is 8.29:1.
+   Supporting capsules ("Upcoming", the count) keep the grey fill. */
+.capsule-accent,
+.photo-label {
+  background: var(--background-accent-pink);
+}
+
+/* Four plus-shaped crosshairs, one just outside each corner. */
+.capsule::after,
+.photo-label::after,
+.status::after,
+.count::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--space-8) * -1);
+  background-image:
+    var(--crosshair), var(--crosshair), var(--crosshair), var(--crosshair);
+  background-position:
+    top left,
+    top right,
+    bottom left,
+    bottom right;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+/* ----------------------------------------------------------------
+   Header
+   ---------------------------------------------------------------- */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-48);
+  max-width: 1440px;
+  min-height: var(--space-96);
+  margin: auto;
+  padding: var(--space-24) var(--space-48);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-16);
+  font-size: 18px;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.brand-divider {
+  height: var(--space-24);
+  border-left: 1px solid var(--stroke-secondary);
+}
+
+/* Official n8n lockup, 480x96 in the source file. Never recoloured or
+   rebuilt — see public/n8n-logo-black-accent.svg. */
+.n8n-logo {
+  display: block;
+  flex-shrink: 0;
+  width: 120px;
+  height: auto;
+}
+
+.header nav {
+  display: flex;
+  gap: var(--space-32);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.header nav a {
+  padding: var(--space-8) 0;
+}
+
+.header nav a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* ----------------------------------------------------------------
+   Intro
+
+   The dot grid (§2.2) sits behind the headline here rather than across the
+   whole page, so it stays a texture and never competes with body copy.
+   ---------------------------------------------------------------- */
+
+.intro {
+  padding: var(--space-80) var(--space-24);
+  background-image: radial-gradient(
+    var(--dot-grid-primary) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+  text-align: center;
+}
+
+/* Display, §1.2: anything over 80px is Display and its line height is 90%
+   of the font size. Clamped between heading-x-x-x-lg and display-sm. */
+.intro h1 {
+  margin: var(--space-16) 0 var(--space-24);
+  font-size: clamp(80px, 10vw, 120px);
+  line-height: 0.9;
+  letter-spacing: -0.01em;
+}
+
+/* §3, Light mode: pink is a fill, never a text colour — Main Accent Pink on
+   a light background is 2.03:1. The period keeps Type/Primary. */
+.period {
+  color: var(--type-primary);
+}
+
+/* body-xl */
+.intro > p:last-child {
+  font-size: 18px;
+  line-height: 22px;
+  color: var(--type-secondary);
+}
+
+/* body-md */
+.eyebrow {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-secondary);
+}
+
+/* ----------------------------------------------------------------
+   Section headings
+   ---------------------------------------------------------------- */
+
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-16);
+  margin-bottom: var(--space-24);
+}
+
+/* heading-md */
+.section-heading h2,
+.about h2 {
+  font-size: 32px;
+  line-height: 36px;
+}
+
+/* ----------------------------------------------------------------
+   Trip card
+   ---------------------------------------------------------------- */
+
+.trip {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--background-primary);
+}
+
+.trip-photo {
+  position: relative;
+  min-height: 392px;
+  overflow: hidden;
+  background: var(--background-tertiary);
+}
+
+.trip-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Capsule styling comes from the capsule block above; this only places it.
+   Offsets leave room for the crosshairs inside the photo's clipped box. */
+.photo-label {
+  position: absolute;
+  bottom: var(--space-24);
+  left: var(--space-24);
+}
+
+.trip-details {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-32);
+}
+
+.trip-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+/* heading-x-sm */
+.edition {
+  font-size: 24px;
+  line-height: 24px;
+}
+
+.edition a {
+  display: inline-block;
+  padding: var(--space-4) 0;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+
+.edition a:hover {
+  text-decoration-thickness: 3px;
+}
+
+.destination {
+  margin-top: var(--space-40);
+}
+
+/* heading-lg */
+.destination .place {
+  font-size: 40px;
+  font-weight: var(--weight-medium);
+  line-height: 42px;
+  letter-spacing: -0.01em;
+}
+
+/* body-lg */
+.dates {
+  margin-top: var(--space-16);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+/* body-lg */
+.trip-description {
+  max-width: 392px;
+  margin: var(--space-24) 0 0;
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--type-secondary);
+}
+
+/* Pinned to the bottom of the details column, so the line sits on the card's
+   baseline however long the description runs.
+
+   body-md/mono, and uppercased: §1.2 says mono is always ALL CAPS. (.poll-meta
+   above uses mono without uppercasing — that predates this and is left alone
+   rather than changed as a side effect, but the two should agree. Flagged.) */
+.trip-attendees {
+  margin-top: auto;
+  padding-top: var(--space-24);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--type-secondary);
+}
+
+/* Placeholder, empty and error lines for anything loaded from the API.
+   body-lg */
+.trip-state {
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--type-secondary);
+}
+
+/* ----------------------------------------------------------------
+   n8ncation detail page, /n8ncation/<slug>
+
+   Bordered like the trip card rather than debossed: this is the same card
+   idiom at a larger size, with the photo running the full width because the
+   page has no second column to balance it against.
+   ---------------------------------------------------------------- */
+
+.detail {
+  margin: var(--space-32) auto var(--space-64);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--background-primary);
+}
+
+/* Only the detail page's state line carries both classes — on the main page
+   it sits inside a section that already has spacing. */
+.trip-state.wrap {
+  padding: var(--space-48) 0;
+}
+
+.detail[hidden] {
+  display: none;
+}
+
+.detail-photo {
+  position: relative;
+  height: 440px;
+  overflow: hidden;
+  background: var(--background-tertiary);
+}
+
+.detail-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.detail-body {
+  padding: var(--space-48);
+}
+
+.detail-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+/* heading-x-x-lg */
+.detail-title {
+  font-size: 56px;
+  line-height: 56px;
+  letter-spacing: -0.01em;
+}
+
+/* body-xl */
+.detail-description {
+  max-width: 640px;
+  margin-top: var(--space-24);
+  font-size: 18px;
+  line-height: 22px;
+  color: var(--type-secondary);
+}
+
+.detail-rsvp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-24);
+  margin-top: var(--space-40);
+  padding-top: var(--space-32);
+  border-top: 1px solid var(--stroke-secondary);
+}
+
+/* body-md/mono, ALL CAPS per §1.2. The organizer line shares it: both are
+   secondary facts about the trip, set below the description. */
+.detail-attendees,
+.detail-organizer {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--type-secondary);
+}
+
+/* Same 24 above as the description it follows. */
+.detail-organizer {
+  margin-top: var(--space-24);
+}
+
+/* Interactive Accent: pink fill with Core Black text (8.29:1). White on Main
+   Accent Pink is 2.03:1 and must never be used. */
+.detail-rsvp-button {
+  order: -1;
+  padding: var(--space-16) var(--space-32);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--interactive-accent-default);
+  color: var(--type-tertiary-buttons);
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 22px;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.detail-rsvp-button:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.detail-rsvp-button:active {
+  background: var(--interactive-accent-pressed);
+}
+
+.detail-rsvp-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Already going. Reads as a state that can be undone rather than as the
+   call to action it was a moment ago. */
+.detail-rsvp-button[aria-pressed="true"] {
+  border-color: var(--stroke-primary);
+  background: var(--interactive-primary-default);
+}
+
+.detail-rsvp-button[aria-pressed="true"]:hover {
+  background: var(--interactive-primary-hover);
+}
+
+/* body-md */
+.detail-rsvp-status {
+  flex-basis: 100%;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-primary);
+}
+
+.detail-rsvp-status:empty {
+  height: 0;
+  overflow: hidden;
+}
+
+/* Locks while the write is in flight, for the same reason a vote does: the
+   Data Table upsert is "update, else insert" with no unique index, so two
+   overlapping writes for one person can both insert. */
+.detail-rsvp.is-busy .detail-rsvp-button {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* ----------------------------------------------------------------
+   Polls
+   ---------------------------------------------------------------- */
+
+.polls {
+  padding-top: var(--space-64);
+}
+
+/* body-lg */
+.polls-intro {
+  max-width: 640px;
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--type-secondary);
+}
+
+/* body-md */
+.polls-note {
+  margin-top: var(--space-16);
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-secondary);
+}
+
+.poll-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: var(--space-24);
+  margin-top: var(--space-24);
+}
+
+/* Deboss Primary M (§2.2): the card is filled with the same colour as the
+   surface around it and pressed in, rather than floated on a drop shadow. */
+.poll {
+  padding: var(--space-32);
+  border-radius: var(--radius-lg);
+  background: var(--background-primary);
+  box-shadow: var(--deboss-m);
+}
+
+/* heading-xxs. §1.2 lists no line height for this style yet — 24px is used
+   here, matching heading-x-sm's 1:1 feel at the next step up. Flagged. */
+.poll-question {
+  font-size: 20px;
+  line-height: 24px;
+}
+
+/* body-md/mono. Sits at the bottom of the card, after the options (and the
+   suggestion form, where there is one), so it takes the same 24 gap those
+   blocks put between themselves. */
+.poll-meta {
+  margin-top: var(--space-24);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  color: var(--type-secondary);
+}
+
+.poll-options {
+  display: grid;
+  gap: var(--space-8);
+  margin: var(--space-24) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The month poll has twelve options, so it runs in two columns. */
+.poll-options-split {
+  grid-template-columns: 1fr 1fr;
+  column-gap: var(--space-8);
+}
+
+.poll-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-12) var(--space-16);
+  overflow: hidden;
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-sm);
+  background: var(--background-primary);
+  color: inherit;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.poll-option:hover {
+  border-color: var(--stroke-primary);
+}
+
+.poll-option:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The result bar sits behind the label, filling to the share of votes.
+   Pink is used as a graphic fill here, never as text — §3, Light mode. */
+.poll-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--pct, 0%);
+  background: var(--color-pink-10);
+  transition: width 0.35s ease;
+}
+
+.poll-label {
+  position: relative;
+  flex: 1;
+}
+
+/* body-md/mono */
+.poll-count {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--type-secondary);
+}
+
+.poll-option[aria-pressed="true"] {
+  border-color: var(--stroke-accent);
+}
+
+.poll-option[aria-pressed="true"] .poll-bar {
+  background: var(--color-pink-30);
+}
+
+.poll-option[aria-pressed="true"] .poll-label {
+  font-weight: var(--weight-medium);
+}
+
+.poll-option[aria-pressed="true"] .poll-count {
+  color: var(--type-primary);
+}
+
+.poll-suggest {
+  margin-top: var(--space-24);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--stroke-secondary);
+}
+
+/* body-md */
+.poll-suggest-label {
+  display: block;
+  margin-bottom: var(--space-8);
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-secondary);
+}
+
+.poll-suggest-row {
+  display: flex;
+  gap: var(--space-8);
+}
+
+/* The profile page's fields share this treatment — same affordance, same
+   site, so they should not look like two different kinds of text box. */
+.poll-suggest input,
+.profile-field input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-12);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-sm);
+  background: var(--background-primary);
+  color: inherit;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.poll-suggest input:focus-visible,
+.profile-field input:focus-visible {
+  border-color: var(--stroke-primary);
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 0;
+}
+
+/* Interactive Accent: pink fill with Core Black text (8.29:1). White on
+   Main Accent Pink is 2.03:1 and must never be used. */
+.poll-suggest button,
+.profile-save {
+  padding: var(--space-12) var(--space-24);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--interactive-accent-default);
+  color: var(--type-tertiary-buttons);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.poll-suggest button:hover,
+.profile-save:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.poll-suggest button:active,
+.profile-save:active {
+  background: var(--interactive-accent-pressed);
+}
+
+.poll-suggest button:focus-visible,
+.profile-save:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* body-md */
+.poll-suggest-status {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-primary);
+}
+
+/* Height collapses while empty, but the node stays in the a11y tree so the
+   live region keeps announcing. */
+.poll-suggest-status:empty {
+  height: 0;
+  overflow: hidden;
+}
+
+.poll-suggest-status:not(:empty) {
+  margin-top: var(--space-8);
+}
+
+/* ----------------------------------------------------------------
+   What to expect
+   ---------------------------------------------------------------- */
+
+.about {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--space-64);
+  padding: var(--space-64) 0;
+}
+
+.about .eyebrow {
+  margin: 0 0 var(--space-16);
+}
+
+/* body-lg */
+.about-copy {
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--type-secondary);
+}
+
+.about-copy p + p {
+  margin-top: var(--space-16);
+}
+
+.expectations {
+  margin: var(--space-24) 0 0;
+  padding-left: var(--space-24);
+}
+
+.expectations li {
+  padding-left: var(--space-8);
+}
+
+.expectations li + li {
+  margin-top: var(--space-16);
+}
+
+.expectations strong {
+  color: var(--type-primary);
+  font-weight: var(--weight-medium);
+}
+
+/* ----------------------------------------------------------------
+   Past n8ncations
+   ---------------------------------------------------------------- */
+
+.past {
+  padding-top: var(--space-32);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-32);
+  padding: var(--space-24) 0 var(--space-32);
+}
+
+/* heading-md */
+.empty-number {
+  font-family: var(--font-mono);
+  font-size: 32px;
+  line-height: 36px;
+  color: var(--type-secondary);
+}
+
+/* body-lg */
+.empty p {
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.empty p span {
+  color: var(--type-secondary);
+}
+
+/* ----------------------------------------------------------------
+   Footer
+   ---------------------------------------------------------------- */
+
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-24);
+  margin-top: var(--space-32);
+  padding: var(--space-32) 0 var(--space-40);
+  border-top: 1px solid var(--stroke-secondary);
+}
+
+footer .brand {
+  gap: var(--space-16);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+/* body-md */
+footer > span {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-secondary);
+}
+
+/* ----------------------------------------------------------------
+   Sign-in control and page notices
+   ---------------------------------------------------------------- */
+
+.auth {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-12);
+  /* Pushes the control to the far end of the header row. */
+  margin-left: auto;
+}
+
+/* A link, not a label: it is the way to the profile page at /me. Styled quiet
+   so the header still reads as identity rather than as a second control
+   competing with Sign out. */
+.auth-user {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-8) var(--space-4) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--type-secondary);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.auth-user:hover {
+  border-color: var(--stroke-secondary);
+  background: var(--interactive-primary-hover);
+  color: var(--type-primary);
+}
+
+.auth-user:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.auth-avatar {
+  width: var(--space-32);
+  height: var(--space-32);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-full);
+}
+
+/* Interactive Primary */
+.auth-button {
+  padding: var(--space-12) var(--space-24);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-full);
+  background: var(--interactive-primary-default);
+  color: var(--type-primary);
+  font: inherit;
+  font-size: 16px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.auth-button:hover {
+  border-color: var(--stroke-primary);
+  background: var(--interactive-primary-hover);
+}
+
+.auth-button:active {
+  background: var(--interactive-primary-pressed);
+}
+
+.auth-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.auth-button-quiet {
+  background: transparent;
+  color: var(--type-secondary);
+}
+
+.auth-button-quiet:hover {
+  background: var(--interactive-primary-hover);
+}
+
+.notice {
+  max-width: 1160px;
+  width: calc(100% - var(--space-96));
+  margin: 0 auto var(--space-12);
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-md);
+  background: var(--background-secondary);
+  color: var(--type-primary);
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.notice[hidden] {
+  display: none;
+}
+
+/* ----------------------------------------------------------------
+   Profile page, /me
+
+   The card is bordered rather than debossed, to match the n8ncation detail
+   card: the same card idiom (border plus Radius/L) for the page's main
+   object. The poll cards keep the deboss where it works.
+
+   max-width reuses the 520px the profile panel had as a dialog. Two short
+   fields stretched across the full 1160px column would read as one long
+   empty bar.
+   ---------------------------------------------------------------- */
+
+/* 64 below, the gap .polls and .about put between home sections, so the
+   card does not run straight into the trip headings that follow it. */
+.me {
+  padding: var(--space-32) 0 var(--space-64);
+}
+
+.profile {
+  max-width: 520px;
+  padding: var(--space-32);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--background-primary);
+  color: var(--type-primary);
+}
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+/* Holds the Google photo, or falls back to initials when the account has
+   none. mono-social-md (§1.2) is the nearest mono step that fills a 64px
+   circle; the smaller mono styles are built for web body text. */
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--space-64);
+  height: var(--space-64);
+  overflow: hidden;
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-full);
+  background: var(--background-tertiary);
+  color: var(--type-secondary);
+  font-family: var(--font-mono);
+  font-size: 24px;
+  line-height: 28px;
+  letter-spacing: 0.02em;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-identity {
+  min-width: 0;
+}
+
+/* heading-x-sm */
+.profile-name {
+  font-size: 24px;
+  line-height: 24px;
+}
+
+/* body-md. An address with no spaces in it must not push the panel wider. */
+.profile-email {
+  margin-top: var(--space-4);
+  color: var(--type-secondary);
+  font-size: 14px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.profile-form {
+  margin-top: var(--space-32);
+  padding-top: var(--space-24);
+  border-top: 1px solid var(--stroke-secondary);
+}
+
+.profile-field {
+  margin-top: var(--space-24);
+}
+
+/* body-md/mono — mono is always ALL CAPS (§1.2). These stay plain mono text
+   rather than capsules: a form label is not capsule content (§2.2 allows only
+   short labels such as dates and categories), and every capsule on this page
+   already uses the standalone crosshair style, which must not be mixed. */
+.profile-label {
+  display: block;
+  margin-bottom: var(--space-8);
+  color: var(--type-secondary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.profile-field input {
+  width: 100%;
+}
+
+/* Disabled until /me has loaded, so a failed fetch cannot leave two empty
+   fields that Save would write over a real team and job title. */
+.profile-field input:disabled {
+  background: var(--background-secondary);
+  color: var(--type-secondary);
+}
+
+.profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-24);
+}
+
+.profile-save:disabled {
+  background: var(--interactive-primary-default);
+  color: var(--type-secondary);
+  cursor: default;
+}
+
+.profile.is-busy .profile-form {
+  opacity: 0.6;
+}
+
+/* body-md */
+.profile-status {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-primary);
+}
+
+/* Collapses while empty but stays in the a11y tree, so the live region keeps
+   announcing — same treatment as the poll status line. */
+.profile-status:empty {
+  height: 0;
+  overflow: hidden;
+}
+
+.profile-status:not(:empty) {
+  margin-top: var(--space-16);
+}
+
+/* ----------------------------------------------------------------
+   Your n8ncations on /me — compact rows
+
+   Ruled list rather than cards: 1px Stroke + Crosshairs/Secondary between
+   rows, the same rule the profile form uses under its header. Every value
+   below is an existing token or type-scale step; the hover fill is the
+   header chip's Interactive Primary/Hover.
+   ---------------------------------------------------------------- */
+
+.my-trips {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--stroke-secondary);
+}
+
+.my-trips li {
+  border-bottom: 1px solid var(--stroke-secondary);
+}
+
+/* Title and meta stack in the first column; the arrow spans both rows in
+   the second, so it stays centred whatever the meta line wraps to. */
+.my-trip {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: var(--space-16);
+  align-items: center;
+  padding: var(--space-16);
+}
+
+.my-trip:hover {
+  background: var(--interactive-primary-hover);
+}
+
+/* Inset, so the ring is not clipped by the rules above and below. */
+.my-trip:focus-visible {
+  outline-offset: -3px;
+}
+
+/* body-lg/medium */
+.my-trip-title {
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: var(--weight-medium);
+}
+
+/* body-md */
+.my-trip-meta {
+  grid-column: 1;
+  margin-top: var(--space-4);
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-secondary);
+}
+
+.my-trip-arrow {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: var(--type-secondary);
+}
+
+/* ----------------------------------------------------------------
+   Poll hint and in-flight state
+   ---------------------------------------------------------------- */
+
+/* body-md */
+.poll-hint {
+  margin-top: var(--space-8);
+  color: var(--type-secondary);
+  font-size: 14px;
+  line-height: 18px;
+}
+
+/* Options lock while a vote is in flight, so a double click cannot start two
+   concurrent writes: the n8n data table upsert is "update, else insert" with
+   no unique index, and overlapping writes can both insert. */
+.poll.is-busy .poll-options {
+  opacity: 0.6;
+}
+
+.poll-option[disabled] {
+  cursor: progress;
+}
+
+/* ----------------------------------------------------------------
+   Responsive — breakpoints stay in this order so they cascade
+   from widest to narrowest.
+   ---------------------------------------------------------------- */
+
+@media (min-width: 1450px) {
+  .intro {
+    padding-top: var(--space-96);
+    padding-bottom: var(--space-96);
+  }
+}
+
+@media (max-width: 900px) {
+  .header {
+    gap: var(--space-32);
+    padding: var(--space-24) var(--space-32);
+  }
+
+  .header nav {
+    gap: var(--space-24);
+  }
+
+  .wrap {
+    width: calc(100% - var(--space-64));
+  }
+
+  .trip-photo {
+    min-height: 408px;
+  }
+
+  .trip-details {
+    padding: var(--space-24);
+  }
+
+  /* heading-md */
+  .destination .place {
+    font-size: 32px;
+    line-height: 36px;
+  }
+
+  .poll-grid {
+    gap: var(--space-16);
+  }
+
+  .poll {
+    padding: var(--space-24);
+  }
+
+  .about {
+    gap: var(--space-32);
+  }
+
+  .detail-photo {
+    height: 360px;
+  }
+
+  .detail-body {
+    padding: var(--space-32);
+  }
+
+  /* heading-x-lg */
+  .detail-title {
+    font-size: 48px;
+    line-height: 48px;
+  }
+}
+
+@media (max-width: 650px) {
+  .header {
+    justify-content: space-between;
+    gap: var(--space-12);
+    min-height: var(--space-80);
+    padding: var(--space-16) var(--space-24);
+  }
+
+  .brand {
+    gap: var(--space-12);
+    font-size: 16px;
+  }
+
+  .brand-divider {
+    height: var(--space-24);
+  }
+
+  .header nav {
+    gap: var(--space-16);
+    font-size: 14px;
+    line-height: 18px;
+  }
+
+  /* Drop "Workations" from the nav; the section is the first thing below. */
+  .header nav a:first-child {
+    display: none;
+  }
+
+  .wrap {
+    width: calc(100% - var(--space-40));
+  }
+
+  .intro {
+    padding: var(--space-48) var(--space-24);
+  }
+
+  /* heading-x-x-x-lg up to display-sm. */
+  .intro h1 {
+    margin: var(--space-16) 0 var(--space-24);
+    font-size: clamp(56px, 13vw, 80px);
+    line-height: 0.9;
+  }
+
+  /* heading-sm */
+  .section-heading h2,
+  .about h2 {
+    font-size: 28px;
+    line-height: 32px;
+  }
+
+  .section-heading {
+    margin-bottom: var(--space-16);
+  }
+
+  .trip {
+    grid-template-columns: 1fr;
+  }
+
+  .trip-photo {
+    min-height: 0;
+    height: 256px;
+  }
+
+  .trip-details {
+    padding: var(--space-24);
+  }
+
+  .destination {
+    margin-top: var(--space-24);
+  }
+
+  .trip-description {
+    margin-top: var(--space-24);
+  }
+
+  .polls {
+    padding-top: var(--space-48);
+  }
+
+  .poll-grid {
+    grid-template-columns: 1fr;
+    margin-top: var(--space-16);
+  }
+
+  .about {
+    grid-template-columns: 1fr;
+    gap: var(--space-24);
+    padding: var(--space-48) 0;
+  }
+
+  .about .eyebrow {
+    margin-bottom: var(--space-12);
+  }
+
+  .past {
+    padding-top: var(--space-24);
+  }
+
+  .empty {
+    gap: var(--space-24);
+    padding-top: var(--space-16);
+  }
+
+  /* heading-x-sm */
+  .empty-number {
+    font-size: 24px;
+    line-height: 24px;
+  }
+
+  footer {
+    gap: var(--space-16);
+    margin-top: var(--space-8);
+    padding: var(--space-24) 0;
+  }
+
+  .profile {
+    padding: var(--space-24);
+  }
+
+  /* body-lg/mono at this size — letter spacing drops to 1% with it. */
+  .profile-avatar {
+    width: var(--space-48);
+    height: var(--space-48);
+    font-size: 16px;
+    line-height: 20px;
+    letter-spacing: 0.01em;
+  }
+
+  /* heading-xxs */
+  .profile-name {
+    font-size: 20px;
+    line-height: 24px;
+  }
+
+  .profile-form {
+    margin-top: var(--space-24);
+  }
+
+  .detail {
+    margin-bottom: var(--space-48);
+  }
+
+  .detail-photo {
+    height: 240px;
+  }
+
+  .detail-body {
+    padding: var(--space-24);
+  }
+
+  /* heading-lg */
+  .detail-title {
+    font-size: 40px;
+    line-height: 42px;
+  }
+
+  .detail-rsvp {
+    gap: var(--space-16);
+    margin-top: var(--space-32);
+    padding-top: var(--space-24);
+  }
+
+  .detail-rsvp-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .header {
+    row-gap: var(--space-8);
+  }
+
+  .header nav {
+    margin-left: auto;
+  }
+
+  /* Two columns of month labels stop fitting around here. */
+  .poll-options-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .poll-bar {
+    transition: none;
+  }
+}

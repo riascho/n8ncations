@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#FAFAFA" />
+    <meta
+      name="description"
+      content="n8ncation brings n8n colleagues together for a week of working across teams and spending time together. Explore our upcoming and past workations."
+    />
+    <!-- Replaced on the other views: with the edition once a trip card loads
+         (src/features/workations.ts), and on /me by src/main.ts. -->
+    <title>n8ncation — n8n workations</title>
+    <!-- Official symbol from the n8n brand portal. The symbol alone is the
+         right mark for a favicon; never draw or approximate a substitute. -->
+    <link rel="icon" type="image/svg+xml" href="/n8n-symbol-accent.svg" />
+    <!-- This one file serves /, /n8ncation/<slug> and /me: every unknown path
+         falls back to index.html (Vite's default SPA fallback in dev and
+         preview, and what any future host has to be configured to do), so
+         there is no rewrite rule to keep in step between environments.
+
+         Picks the view here, as a classic inline script, because it runs
+         before first paint. Left to the deferred module, a trip URL would
+         flash the home page while the bundle downloads. src/main.ts reads
+         the result instead of matching the path a second time. Without JS
+         this never runs, and the stylesheet falls back to the home view. -->
+    <script>
+      (function () {
+        var path = location.pathname;
+        document.documentElement.dataset.view =
+          path === "/me" || path === "/me/"
+            ? "me"
+            : path.startsWith("/n8ncation/")
+              ? "detail"
+              : "home";
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#workations" data-only="home">Skip to workations</a>
+    <a class="skip" href="#workation" data-only="detail"
+      >Skip to the n8ncation</a
+    >
+    <a class="skip" href="#profile" data-only="me">Skip to your profile</a>
+    <header class="header">
+      <a class="brand" href="/" aria-label="n8ncation home"
+        ><img
+          class="n8n-logo"
+          src="/n8n-logo-black-accent.svg"
+          alt="n8n"
+          width="120"
+          height="24"
+        /><span class="brand-divider"></span><span>n8ncation</span></a
+      >
+      <nav aria-label="Main navigation">
+        <a href="/#workations">Workations</a><a href="/#polls">Vote</a
+        ><a href="/#about">What to expect</a>
+      </nav>
+      <div class="auth" data-auth></div>
+    </header>
+    <p class="notice" data-notice role="status" hidden></p>
+    <main>
+      <p
+        class="trip-state wrap"
+        data-detail-state
+        data-only="detail"
+        role="status"
+      >
+        Loading this n8ncation…
+      </p>
+      <noscript>
+        <p class="trip-state wrap" data-only="detail">
+          This page needs JavaScript — the n8ncation is loaded from the n8n API.
+        </p>
+      </noscript>
+      <!-- Hidden until the fetch resolves, so a half-filled card never
+           flashes up. -->
+      <article
+        class="detail wrap"
+        id="workation"
+        data-detail
+        data-only="detail"
+        aria-labelledby="detail-title"
+        hidden
+      >
+        <div class="detail-photo">
+          <img
+            data-detail-photo
+            alt=""
+            width="1440"
+            height="960"
+            fetchpriority="high"
+          /><span class="photo-label" data-detail-label></span>
+        </div>
+        <div class="detail-body">
+          <div class="detail-top">
+            <h1 class="detail-title" id="detail-title" data-detail-title></h1>
+            <span class="status" data-detail-status-label></span>
+          </div>
+          <div class="destination">
+            <p class="place" data-detail-place></p>
+            <p class="dates" data-detail-dates></p>
+          </div>
+          <p class="detail-description" data-detail-description></p>
+          <p class="detail-organizer" data-detail-organizer hidden></p>
+          <div class="detail-rsvp" data-detail-rsvp>
+            <p class="detail-attendees" data-detail-attendees role="status"></p>
+            <button
+              class="detail-rsvp-button"
+              type="button"
+              data-detail-button
+              aria-pressed="false"
+            ></button>
+            <p
+              class="detail-rsvp-status"
+              data-detail-rsvp-status
+              role="status"
+            ></p>
+          </div>
+        </div>
+      </article>
+      <!-- /me. The card stays hidden until GET /me resolves, and is emptied
+           again on sign-out: it shows an email address. -->
+      <section
+        class="me wrap"
+        id="profile"
+        data-me
+        data-only="me"
+        aria-labelledby="profile-title"
+      >
+        <p class="trip-state" data-me-state role="status">
+          Loading your profile…
+        </p>
+        <noscript>
+          <p class="trip-state">
+            Your profile needs JavaScript — it is loaded from the n8n API.
+          </p>
+        </noscript>
+        <div class="profile" data-profile hidden>
+          <div class="profile-head">
+            <!-- The name sits right beside it, so the photo and the initials
+                 fallback are both decoration. -->
+            <span class="profile-avatar" aria-hidden="true"></span>
+            <div class="profile-identity">
+              <h1 class="profile-name" id="profile-title"></h1>
+              <p class="profile-email"></p>
+            </div>
+          </div>
+          <form class="profile-form">
+            <div class="profile-field">
+              <label class="profile-label" for="profile-team">Team</label>
+              <input
+                id="profile-team"
+                name="team"
+                type="text"
+                autocomplete="organization"
+                placeholder="Developer Relations"
+              />
+            </div>
+            <div class="profile-field">
+              <label class="profile-label" for="profile-job-title"
+                >Job title</label
+              >
+              <input
+                id="profile-job-title"
+                name="jobTitle"
+                type="text"
+                autocomplete="organization-title"
+                placeholder="Developer Advocate"
+              />
+            </div>
+            <div class="profile-actions">
+              <button class="profile-save" type="submit">Save</button>
+            </div>
+          </form>
+          <p class="profile-status" role="status"></p>
+        </div>
+      </section>
+      <section
+        class="workations wrap"
+        data-only="me"
+        data-my-trips
+        aria-labelledby="my-upcoming-title"
+        hidden
+      >
+        <div class="section-heading">
+          <h2 id="my-upcoming-title">Your upcoming n8ncations</h2>
+        </div>
+        <div data-my-upcoming></div>
+      </section>
+      <section
+        class="past wrap"
+        data-only="me"
+        data-my-trips
+        aria-labelledby="my-past-title"
+        hidden
+      >
+        <div class="section-heading">
+          <h2 id="my-past-title">Your past n8ncations</h2>
+        </div>
+        <div data-my-past></div>
+      </section>
+      <section class="intro" data-only="home" aria-labelledby="page-title">
+        <p class="eyebrow">n8n + WORKATION</p>
+        <h1 id="page-title">n8ncation<span class="period">.</span></h1>
+        <p>
+          The ultimate remote work and vacation experience for the n8n team!
+        </p>
+      </section>
+      <section
+        class="workations wrap"
+        id="workations"
+        data-only="home"
+        aria-labelledby="upcoming-title"
+      >
+        <div class="section-heading">
+          <h2 id="upcoming-title">Upcoming n8ncation</h2>
+        </div>
+        <noscript>
+          <p class="trip-state">
+            The n8ncation list needs JavaScript — it is loaded from the n8n API.
+          </p>
+        </noscript>
+        <div data-upcoming>
+          <p class="trip-state" data-upcoming-state role="status">
+            Loading n8ncations…
+          </p>
+        </div>
+      </section>
+      <section
+        class="about wrap"
+        id="about"
+        data-only="home"
+        aria-labelledby="about-title"
+      >
+        <div>
+          <p class="eyebrow">n8n + WORKATION</p>
+          <h2 id="about-title">What to expect</h2>
+        </div>
+        <div class="about-copy">
+          <p>
+            We’re a remote company. A <b>n8ncation</b> is a chance to
+            collaborate with colleagues you might not usually work with.
+          </p>
+          <ul class="expectations">
+            <li>
+              <strong>Unique Chance:</strong> Live, work and collaborate
+              together with people from different teams and gain fresh
+              perspectives and creative solutions
+            </li>
+            <li>
+              <strong>Epic Work-Life-Balance:</strong> Work your regular remote
+              hours, then enjoy unique after-work activities like surfing, beach
+              volleyball or sunset hikes.
+            </li>
+            <li>
+              <strong>Inspiring Location:</strong> Swap your home office for a
+              vibrant new setting that creates unforgettable memories.
+            </li>
+          </ul>
+        </div>
+      </section>
+      <section
+        class="polls wrap"
+        id="polls"
+        data-only="home"
+        aria-labelledby="polls-title"
+      >
+        <div class="section-heading">
+          <h2 id="polls-title">Help plan the next one</h2>
+        </div>
+        <p class="polls-intro">
+          Two quick questions. Results are shared with the whole team and update
+          the moment you vote — change your mind any time.
+        </p>
+        <noscript>
+          <p class="polls-note">
+            Voting needs JavaScript — the questions are below for reference.
+          </p>
+        </noscript>
+        <div class="poll-grid" data-polls></div>
+      </section>
+      <!-- One preview card per n8ncation, filled from GET /workations. The
+           heading links through to /n8ncation/<slug> for the full card. -->
+      <template id="trip-template">
+        <article class="trip">
+          <div class="trip-photo">
+            <img alt="" width="1440" height="960" /><span
+              class="photo-label"
+            ></span>
+          </div>
+          <div class="trip-details">
+            <div class="trip-top">
+              <h3 class="edition"><a></a></h3>
+              <span class="status"></span>
+            </div>
+            <div class="destination">
+              <p class="place"></p>
+              <p class="dates"></p>
+            </div>
+            <p class="trip-description"></p>
+            <p class="trip-attendees"></p>
+          </div>
+        </article>
+      </template>
+      <template id="poll-template">
+        <article class="poll" data-poll>
+          <h3 class="poll-question"></h3>
+          <p class="poll-hint"></p>
+          <ul class="poll-options"></ul>
+          <form class="poll-suggest" data-poll-suggest>
+            <label class="poll-suggest-label"></label>
+            <div class="poll-suggest-row">
+              <input name="suggestion" type="text" autocomplete="off" />
+              <button type="submit">Add</button>
+            </div>
+          </form>
+          <p class="poll-suggest-status" data-poll-status role="status"></p>
+          <p class="poll-meta" data-poll-meta role="status"></p>
+        </article>
+      </template>
+      <!-- One compact row per trip on /me, filled by renderMyWorkations().
+           The whole row is the link; the arrow is decoration, so the link's
+           accessible name is just the title, place and dates. -->
+      <template id="my-trip-template">
+        <li>
+          <a class="my-trip">
+            <span class="my-trip-title"></span>
+            <span class="my-trip-meta"
+              ><span class="my-trip-place"></span> ·
+              <span class="my-trip-dates"></span
+            ></span>
+            <span class="my-trip-arrow" aria-hidden="true">→</span>
+          </a>
+        </li>
+      </template>
+      <template id="poll-option-template">
+        <li>
+          <button class="poll-option" type="button" aria-pressed="false">
+            <span class="poll-bar" aria-hidden="true"></span
+            ><span class="poll-label"></span><span class="poll-count">0</span>
+          </button>
+        </li>
+      </template>
+      <section class="past wrap" data-only="home" aria-labelledby="past-title">
+        <div class="section-heading">
+          <h2 id="past-title">Past n8ncations</h2>
+          <span class="count" data-past-count>00</span>
+        </div>
+        <div data-past></div>
+      </section>
+    </main>
+    <footer class="wrap">
+      <a class="brand" href="#" aria-label="Back to top"
+        ><img
+          class="n8n-logo"
+          src="/n8n-logo-black-accent.svg"
+          alt="n8n"
+          width="120"
+          height="24"
+        /><span class="brand-divider"></span><span>n8ncation</span></a
+      ><span>Workations at n8n</span>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,142 @@
+/* n8ncation — design tokens.
+
+   Every value here comes from n8ndesign.md. Nothing is invented: if a value
+   is needed that is not in the brand doc, ask rather than mixing one.
+
+   Layer 1 is the raw primitives (n8ndesign.md §1). Layer 2 is the Light mode
+   semantic set (§3). Components should only ever reach for layer 2. */
+
+:root {
+  /* ----------------------------------------------------------------
+     1. Core primitives — raw brand values, §1.1
+     ---------------------------------------------------------------- */
+
+  /* Core */
+  --color-core-white: #fafafa;
+  --color-core-black: #191919;
+
+  /* Accent: pinks. #FF91AC is the signature colour; the rest support it. */
+  --color-pink-10: #ffe8ec;
+  --color-pink-20: #ffd0d9;
+  --color-pink-30: #ffbcca;
+  --color-pink-main: #ff91ac;
+  --color-pink-70: #87003c;
+  --color-pink-80: #5a0026;
+  --color-pink-90: #44001b;
+
+  /* Greys */
+  --color-gray-0: #ffffff;
+  --color-gray-05: #fafafa;
+  --color-gray-10: #f8f8f8;
+  --color-gray-15: #f1f1f1;
+  --color-gray-20: #eaeaea;
+  --color-gray-25: #e0e0e0;
+  --color-gray-30: #d6d6d6;
+  --color-gray-40: #bfbfbf;
+  --color-gray-50: #a4a4a4;
+  --color-gray-60: #868686;
+  --color-gray-70: #676767;
+  --color-gray-80: #464646;
+  --color-gray-85: #353535;
+  --color-gray-90: #242424;
+  --color-gray-95: #191919;
+
+  /* Spacing, §1.3 — the rule of 8. 4 and 12 are for fine detail only,
+     inside small elements such as capsules. */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+  --space-64: 64px;
+  --space-80: 80px;
+  --space-88: 88px;
+  --space-96: 96px;
+  --space-120: 120px;
+  --space-160: 160px;
+  --space-240: 240px;
+
+  /* Corner radius, §1.4 */
+  --radius-none: 0;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 400px;
+
+  /* Typography, §1.2.
+     The Baumer files are not bundled with this repo yet. The
+     family names below are the exact strings the font files register as, so
+     the stack resolves the moment the fonts are installed or self-hosted. */
+  --font-sans: "n8n Baumer Uniwidth", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "n8n Baumer Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --weight-regular: 400;
+  --weight-medium: 500;
+
+  /* ----------------------------------------------------------------
+     2. Graphic Mode: Light, §3
+
+     Light is the brand default and the right mode for this page. Every
+     component colour below must come from this block, not from layer 1.
+     ---------------------------------------------------------------- */
+
+  --background-primary: var(--color-gray-05);
+  --background-secondary: var(--color-gray-15);
+  --background-tertiary: var(--color-gray-20);
+  --background-accent-pink: var(--color-pink-main);
+
+  --type-primary: var(--color-core-black);
+  --type-secondary: rgb(25 25 25 / 50%); /* Core Black at 50% */
+  --type-tertiary-buttons: var(--color-core-black);
+
+  --interactive-primary-default: var(--color-gray-15);
+  --interactive-primary-hover: var(--color-gray-10);
+  --interactive-primary-pressed: var(--color-gray-15);
+
+  --interactive-accent-default: var(--color-pink-main);
+  --interactive-accent-hover: var(--color-pink-20);
+  --interactive-accent-pressed: var(--color-pink-30);
+
+  --dot-grid-primary: var(--color-gray-30);
+  --dot-grid-accent: var(--color-pink-20);
+
+  --stroke-primary: var(--color-gray-40);
+  --stroke-secondary: var(--color-gray-25);
+  --stroke-accent: var(--color-pink-main);
+
+  --capsule-connector-dot: var(--color-core-black);
+
+  /* Crosshair for standalone capsules, §2.2. A 9x9 plus drawn in
+     Stroke + Crosshairs/Secondary (Gray 25, #E0E0E0). The colour is
+     inlined because a custom property cannot be interpolated into a data
+     URI; this page is Light mode only, so there is one value to carry. */
+  --crosshair: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='9'%20height='9'%3E%3Crect%20x='4'%20width='1'%20height='9'%20fill='%23E0E0E0'/%3E%3Crect%20y='4'%20width='9'%20height='1'%20fill='%23E0E0E0'/%3E%3C/svg%3E");
+
+  /* Focus ring. §3 names Interactive Primary/Focused as Main Accent Pink,
+     but pink on a Light background is 2.03:1, under the 3:1 WCAG needs for a
+     focus indicator. Core Black is used instead so focus stays visible.
+     Flagged for the design team. */
+  --focus-ring: var(--color-core-black);
+
+  /* ----------------------------------------------------------------
+     3. Deboss, §2.2 — Deboss Primary, Light mode values
+
+     A debossed surface is filled with the same colour as the surface around
+     it, then pressed in with two inner shadows. Top-left Gray 20, bottom-
+     right Gray 0.
+     ---------------------------------------------------------------- */
+
+  --deboss-s:
+    inset 4px 4px 8px 0 var(--color-gray-20),
+    inset -4px -4px 8px 0 var(--color-gray-0);
+  --deboss-m:
+    inset 8px 8px 12px 0 var(--color-gray-20),
+    inset -8px -8px 12px 0 var(--color-gray-0);
+  --deboss-l:
+    inset 12px 12px 16px 0 var(--color-gray-20),
+    inset -12px -12px 16px 0 var(--color-gray-0);
+}
