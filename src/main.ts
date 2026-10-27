@@ -12,6 +12,8 @@ import {
   signOut,
   takeReturnPath,
 } from "./auth";
+import { mountLogistics, showLogistics } from "./features/logistics";
+import { mountPitchForm, mountPitches } from "./features/pitches";
 import { mountPolls } from "./features/polls";
 import { clearProfile, mountProfile, showProfile } from "./features/profile";
 import {
@@ -135,7 +137,7 @@ async function loadMe(): Promise<void> {
     }
     showState("");
     showProfile(me);
-    renderMyWorkations(upcoming, past, workations, me.signups);
+    renderMyWorkations(upcoming, past, workations, me.signups, me.waitlist);
     for (const section of sections) {
       section.hidden = false;
     }
@@ -288,8 +290,22 @@ function mountView(): void {
      behind a trip card. */
   if (view === "detail") {
     const detail = el("[data-detail]");
-    if (detail) {
-      void mountWorkationDetail(detail);
+    const logistics = el("[data-logistics]");
+    const roster = el("[data-roster]");
+    if (detail && logistics && roster) {
+      mountLogistics(logistics, roster);
+      /* workations.ts owns the RSVP; logistics.ts reacts to it. They cannot
+         import each other, so the state passes through here. */
+      void mountWorkationDetail(detail, showLogistics);
+    }
+    return;
+  }
+
+  if (view === "pitch") {
+    document.title = "Pitch an n8ncation — n8ncation";
+    const pitch = el("[data-pitch-page]");
+    if (pitch) {
+      mountPitchForm(pitch);
     }
     return;
   }
@@ -312,8 +328,14 @@ function mountView(): void {
   }
 
   const grid = el("[data-polls]");
-  if (grid) {
-    mountPolls(grid);
+  const pollsState = el("[data-polls-state]");
+  if (grid && pollsState) {
+    mountPolls(grid, pollsState);
+  }
+
+  const pitches = el("[data-pitches]");
+  if (pitches) {
+    void mountPitches(pitches);
   }
 }
 

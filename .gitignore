@@ -1,5 +1,6 @@
 # Local roadmap notes, deliberately not in the repo
 todos.md
+.n8n/
 
 # Dependencies
 node_modules/

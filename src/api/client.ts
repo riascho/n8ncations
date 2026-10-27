@@ -6,9 +6,16 @@
 
 import { ApiError } from "./types";
 import type {
+  Logistics,
+  LogisticsResponse,
   Me,
+  NewPitch,
+  NewPitchResult,
+  PitchesResponse,
   PollsResponse,
   ProfileUpdate,
+  RosterResponse,
+  RsvpResult,
   WorkationsResponse,
 } from "./types";
 import { getToken } from "../auth";
@@ -112,12 +119,18 @@ export function getMe(): Promise<Me> {
 
 /* `attending` carries both directions rather than having a separate cancel
    path, so the button is one call either way. The workflow upserts on true
-   and deletes the row on false. */
-export function rsvp(workationId: string, attending: boolean): Promise<void> {
+   and deletes the row on false.
+
+   Signing up answers with where you landed (a spot or the waitlist).
+   Cancelling answers 204, so it resolves to undefined. */
+export function rsvp(
+  workationId: string,
+  attending: boolean,
+): Promise<RsvpResult | undefined> {
   if (usingMock) {
     return mock.rsvp(workationId, attending);
   }
-  return request<void>(
+  return request<RsvpResult | undefined>(
     "/rsvp",
     { method: "POST", body: JSON.stringify({ workationId, attending }) },
     true,
@@ -158,4 +171,71 @@ export function addPollOption(pollId: string, value: string): Promise<void> {
     { method: "POST", body: JSON.stringify({ pollId, value }) },
     true,
   );
+}
+
+export function getPitches(): Promise<PitchesResponse> {
+  return usingMock
+    ? mock.getPitches()
+    : request<PitchesResponse>("/pitches", {}, true);
+}
+
+export function createPitch(pitch: NewPitch): Promise<NewPitchResult> {
+  if (usingMock) {
+    return mock.createPitch(pitch);
+  }
+  return request<NewPitchResult>(
+    "/pitch",
+    { method: "POST", body: JSON.stringify(pitch) },
+    true,
+  );
+}
+
+/* Same two-way shape as rsvp(): true adds an interest row, false removes it. */
+export function setPitchInterest(
+  pitchId: string,
+  interested: boolean,
+): Promise<void> {
+  if (usingMock) {
+    return mock.setPitchInterest(pitchId, interested);
+  }
+  return request<void>(
+    "/pitch-interest",
+    { method: "POST", body: JSON.stringify({ pitchId, interested }) },
+    true,
+  );
+}
+
+/* The trip goes in the query string on the reads. GET and POST share the
+   /logistics path the same way /me does: Allow Multiple HTTP Methods. */
+export function getLogistics(workationId: string): Promise<LogisticsResponse> {
+  if (usingMock) {
+    return mock.getLogistics(workationId);
+  }
+  const query = new URLSearchParams({ workationId });
+  return request<LogisticsResponse>(`/logistics?${query}`, {}, true);
+}
+
+export function saveLogistics(
+  workationId: string,
+  logistics: Logistics,
+): Promise<void> {
+  if (usingMock) {
+    return mock.saveLogistics(workationId, logistics);
+  }
+  return request<void>(
+    "/logistics",
+    { method: "POST", body: JSON.stringify({ workationId, ...logistics }) },
+    true,
+  );
+}
+
+/* Organizer only. Anyone else gets a 404 rather than a 403: this module
+   reads every 403 as an expired session. Only called for a trip in
+   me.organizing anyway. */
+export function getRoster(workationId: string): Promise<RosterResponse> {
+  if (usingMock) {
+    return mock.getRoster(workationId);
+  }
+  const query = new URLSearchParams({ workationId });
+  return request<RosterResponse>(`/roster?${query}`, {}, true);
 }

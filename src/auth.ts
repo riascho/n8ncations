@@ -99,11 +99,21 @@ function readStoredToken(): string | null {
     return null;
   }
   const claims = decodeClaims(token);
-  if (!claims || isExpired(claims)) {
+  if (!claims || isExpired(claims) || isStrayDemoToken(token)) {
     signOut();
     return null;
   }
   return token;
+}
+
+/* A demo token minted in mock mode survives in localStorage after the API
+   base is set. n8n would reject it on the first call, but until then the
+   page would count as signed in and show private markup, so drop it. */
+function isStrayDemoToken(token: string): boolean {
+  return (
+    token.endsWith(".unsigned-demo") &&
+    (import.meta.env.VITE_API_BASE ?? "") !== ""
+  );
 }
 
 /** The session JWT, or null when nobody is signed in. */

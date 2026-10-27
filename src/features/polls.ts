@@ -44,6 +44,12 @@ interface Snapshot {
 
 const views = new Map<string, PollView>();
 
+/* The grid and the line shown in its place until the first GET /polls
+   succeeds. The cards are built from the bundled config, so revealing them
+   only after a verified response keeps them behind n8n's session check. */
+let gridRoot: HTMLElement | null = null;
+let gridState: HTMLElement | null = null;
+
 /* ----------------------------------------------------------------
    Small helpers
    ---------------------------------------------------------------- */
@@ -391,6 +397,10 @@ async function refresh(): Promise<void> {
   try {
     try {
       const { polls } = await api.getPolls();
+      if (gridRoot && gridState) {
+        gridRoot.hidden = false;
+        gridState.hidden = true;
+      }
       for (const result of polls) {
         const view = views.get(result.pollId);
         if (view) {
@@ -415,6 +425,14 @@ async function refresh(): Promise<void> {
     } catch (error) {
       for (const view of views.values()) {
         say(view, describe(error, "Results could not be loaded."));
+      }
+      /* Before the first success the cards are still hidden, so the message
+         goes where they would be. */
+      if (gridRoot?.hidden && gridState) {
+        gridState.textContent = describe(
+          error,
+          "The polls could not be loaded.",
+        );
       }
       return;
     }
@@ -462,7 +480,9 @@ function maybeResync(): void {
   void refresh();
 }
 
-export function mountPolls(root: HTMLElement): void {
+export function mountPolls(root: HTMLElement, state: HTMLElement): void {
+  gridRoot = root;
+  gridState = state;
   for (const config of POLLS) {
     const view = createCard(config);
     views.set(config.id, view);
