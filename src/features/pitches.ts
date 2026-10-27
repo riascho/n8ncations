@@ -8,6 +8,8 @@
    - /pitch: the form to submit one. The person pitching becomes the
      organizer and counts as the first interested person.
    - /pitch?edit=<pitchId>: the same form, filled in, for the organizer.
+   - /me: the list of pitches you organize, each open one linking to its
+     edit form. main.ts fetches the data and hands it over.
 
    Nothing here confirms or expires a pitch. A scheduled n8n workflow does
    that once a day (see README → Pitches), so a confirmed pitch simply stops
@@ -74,6 +76,11 @@ function safeUrl(value: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** The organizer's edit form for one pitch, linked from its card and /me. */
+function editPath(pitchId: string): string {
+  return `${appPath("/pitch")}?${new URLSearchParams({ edit: pitchId })}`;
 }
 
 /* ----------------------------------------------------------------
@@ -282,10 +289,7 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
   requireEl(cancelForm, "label").setAttribute("for", reasonId);
 
   const owner = requireEl(card, ".pitch-owner");
-  requireEl(owner, ".pitch-edit").setAttribute(
-    "href",
-    `${appPath("/pitch")}?${new URLSearchParams({ edit: pitch.pitchId })}`,
-  );
+  requireEl(owner, ".pitch-edit").setAttribute("href", editPath(pitch.pitchId));
 
   const view: PitchView = {
     root: card,
@@ -368,6 +372,59 @@ export async function mountPitches(slot: HTMLElement): Promise<void> {
   for (const pitch of [...pitches].sort(byDeadline)) {
     slot.appendChild(buildPitchCard(pitch));
   }
+}
+
+/* ----------------------------------------------------------------
+   Your pitches, /me
+
+   The same compact rows as "your trips" on that page. Built from GET
+   /pitches, so it lists what that route returns: your open pitches, and
+   cancelled ones until their deadline. A confirmed pitch shows up under
+   your trips instead, since you're signed up for it.
+   ---------------------------------------------------------------- */
+
+function buildMyPitchRow(pitch: Pitch): HTMLElement {
+  const row = template("my-pitch-template");
+  const link = requireEl(row, ".my-trip");
+  /* textContent throughout: the organizer typed all of it. */
+  requireEl(row, ".my-trip-title").textContent = pitch.place;
+  const dates = document.createElement("span");
+  renderDateRange(dates, pitch.startDate, pitch.endDate);
+  const meta = requireEl(row, ".my-trip-meta");
+  const action = requireEl(row, ".my-pitch-action");
+
+  if (pitch.status === "cancelled") {
+    /* No href: nothing left to edit, so the row is not a link. */
+    link.classList.add("is-static");
+    meta.append(dates, ` · Cancelled: ${pitch.cancelReason}`);
+    action.remove();
+  } else {
+    link.setAttribute("href", editPath(pitch.pitchId));
+    meta.append(
+      dates,
+      ` · ${progressText(pitch)} · Closes ${formatDay(pitch.deadline)}`,
+    );
+    action.textContent = "Edit";
+  }
+  return row;
+}
+
+export function renderMyPitches(slot: HTMLElement, pitches: Pitch[]): void {
+  const mine = pitches.filter((pitch) => pitch.organizedByMe).sort(byDeadline);
+  slot.replaceChildren();
+  if (mine.length === 0) {
+    const none = document.createElement("p");
+    none.className = "trip-state";
+    none.textContent = "You haven’t pitched an n8ncation yet.";
+    slot.appendChild(none);
+    return;
+  }
+  const list = document.createElement("ul");
+  list.className = "my-trips";
+  for (const pitch of mine) {
+    list.appendChild(buildMyPitchRow(pitch));
+  }
+  slot.appendChild(list);
 }
 
 /* ----------------------------------------------------------------

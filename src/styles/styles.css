@@ -918,7 +918,8 @@ li {
    Past n8ncations
    ---------------------------------------------------------------- */
 
-.past {
+.past,
+.my-pitches {
   padding-top: var(--space-32);
 }
 
@@ -1286,6 +1287,29 @@ footer > span {
   grid-column: 2;
   grid-row: 1 / span 2;
   color: var(--type-secondary);
+}
+
+/* A cancelled pitch: an <a> without href, so it must not look clickable. */
+.my-trip.is-static:hover {
+  background: none;
+}
+
+/* body-md/medium. Words rather than an arrow: it says what the row does. */
+.my-pitch-action {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+}
+
+/* "Your pitches" heading with the pitch button at the far end. */
+.my-pitches-heading {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.my-pitches[hidden] {
+  display: none;
 }
 
 /* ----------------------------------------------------------------

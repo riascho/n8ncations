@@ -13,7 +13,11 @@ import {
   takeReturnPath,
 } from "./auth";
 import { mountLogistics, showLogistics } from "./features/logistics";
-import { mountPitchForm, mountPitches } from "./features/pitches";
+import {
+  mountPitchForm,
+  mountPitches,
+  renderMyPitches,
+} from "./features/pitches";
 import { mountPolls } from "./features/polls";
 import { clearProfile, mountProfile, showProfile } from "./features/profile";
 import {
@@ -151,6 +155,34 @@ async function loadMe(): Promise<void> {
         : "Your profile could not be loaded.",
     );
   }
+}
+
+/* "Your pitches" on /me. A separate request from loadMe(), so the profile
+   and the pitch list each show whatever loaded. The section stays hidden
+   until GET /pitches succeeds. On an expired session it stays hidden
+   instead of repeating the message the profile already shows. */
+async function loadMyPitches(): Promise<void> {
+  const section = el("[data-my-pitches]");
+  const list = el("[data-my-pitches-list]");
+  if (!section || !list) {
+    return;
+  }
+  try {
+    const { pitches } = await api.getPitches();
+    renderMyPitches(list, pitches);
+  } catch (error) {
+    if (error instanceof ApiError && error.isAuthFailure) {
+      return;
+    }
+    const state = document.createElement("p");
+    state.className = "trip-state";
+    state.textContent =
+      error instanceof ApiError
+        ? error.message
+        : "Your pitches could not be loaded.";
+    list.replaceChildren(state);
+  }
+  section.hidden = false;
 }
 
 function renderAuth(): void {
@@ -317,6 +349,7 @@ function mountView(): void {
     if (me) {
       mountProfile(me);
       void loadMe();
+      void loadMyPitches();
     }
     return;
   }
