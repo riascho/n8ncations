@@ -1693,6 +1693,53 @@ footer > span {
   margin-top: var(--space-8);
 }
 
+/* A cancelled pitch: the reason takes the place of the progress and the
+   button, pinned to the bottom of the card the same way. The "Cancelled"
+   capsule in the top row carries the state. */
+.pitch-cancelled {
+  margin-top: auto;
+  padding-top: var(--space-24);
+}
+
+/* body-md/mono, ALL CAPS per §1.2. */
+.pitch-cancelled-label {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--type-secondary);
+}
+
+/* body-lg */
+.pitch-cancelled-reason {
+  margin-top: var(--space-8);
+  font-size: 16px;
+  line-height: 20px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+/* The organizer's controls, under the interest button. */
+.pitch-owner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-16);
+  margin-top: var(--space-16);
+}
+
+.pitch-cancel {
+  display: grid;
+  gap: var(--space-16);
+  margin-top: var(--space-24);
+}
+
+.pitch-owner[hidden],
+.pitch-cancel[hidden] {
+  display: none;
+}
+
 /* ----------------------------------------------------------------
    Pitch form, /pitch
 

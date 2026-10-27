@@ -11,7 +11,9 @@ import type {
   Me,
   NewPitch,
   NewPitchResult,
+  PitchCancel,
   PitchesResponse,
+  PitchUpdate,
   PollsResponse,
   ProfileUpdate,
   RosterResponse,
@@ -186,6 +188,31 @@ export function createPitch(pitch: NewPitch): Promise<NewPitchResult> {
   return request<NewPitchResult>(
     "/pitch",
     { method: "POST", body: JSON.stringify(pitch) },
+    true,
+  );
+}
+
+/* Organizer only, like the cancel below. Anyone else gets a 404 rather than
+   a 403, which this module would read as an expired session. */
+export function updatePitch(update: PitchUpdate): Promise<void> {
+  if (usingMock) {
+    return mock.updatePitch(update);
+  }
+  return request<void>(
+    "/pitch-update",
+    { method: "POST", body: JSON.stringify(update) },
+    true,
+  );
+}
+
+export function cancelPitch(pitchId: string, reason: string): Promise<void> {
+  if (usingMock) {
+    return mock.cancelPitch(pitchId, reason);
+  }
+  const body: PitchCancel = { pitchId, reason };
+  return request<void>(
+    "/pitch-cancel",
+    { method: "POST", body: JSON.stringify(body) },
     true,
   );
 }

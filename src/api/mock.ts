@@ -12,6 +12,7 @@ import type {
   NewPitchResult,
   Pitch,
   PitchesResponse,
+  PitchUpdate,
   PollResult,
   PollsResponse,
   ProfileUpdate,
@@ -25,6 +26,7 @@ import type {
 } from "./types";
 import { POLLS } from "../data/polls";
 import { getUser } from "../auth";
+import { todayIso } from "../dates";
 import type { SessionUser } from "../auth";
 
 interface VoteRow {
@@ -231,16 +233,22 @@ function logisticsKey(workationId: string, sub: string): string {
 }
 
 /* Stands in for the `pitches` and `pitch_interest` tables. Only open pitches
-   are seeded: the real GET /pitches leaves the others out. The first is a
-   few people short of its threshold, so registering interest moves the bar
-   visibly. */
-type PitchRow = Omit<Pitch, "interested" | "interestedByMe" | "organizer"> & {
+   are seeded: the real GET /pitches leaves confirmed and expired ones out.
+   The first is a few people short of its threshold, so registering interest
+   moves the bar visibly. The demo user pitched the third, so its card shows
+   the edit and cancel controls. */
+type PitchRow = Omit<
+  Pitch,
+  "interested" | "interestedByMe" | "organizedByMe" | "organizer"
+> & {
   organizerSub: string;
 };
 
 const pitchRows: PitchRow[] = [
   {
     pitchId: "p-01",
+    status: "open",
+    cancelReason: "",
     place: "Porto, Portugal",
     startDate: "2027-05-10",
     endDate: "2027-05-17",
@@ -256,6 +264,8 @@ const pitchRows: PitchRow[] = [
   },
   {
     pitchId: "p-02",
+    status: "open",
+    cancelReason: "",
     place: "Galway, Ireland",
     startDate: "2027-06-07",
     endDate: "2027-06-11",
@@ -269,11 +279,29 @@ const pitchRows: PitchRow[] = [
     costIncludes: "",
     organizerSub: "seed-3",
   },
+  {
+    pitchId: "p-03",
+    status: "open",
+    cancelReason: "",
+    place: "Lake Bled, Slovenia",
+    startDate: "2027-04-12",
+    endDate: "2027-04-16",
+    description:
+      "A guesthouse on the lake with fast wifi and a big shared kitchen. Ljubljana airport is 40 minutes away.",
+    accommodationUrl: "https://example.com/bled-guesthouse",
+    capacity: 8,
+    threshold: 5,
+    deadline: "2027-01-15",
+    costEstimate: 520,
+    costIncludes: "Accommodation and breakfast",
+    organizerSub: "demo-user",
+  },
 ];
 
 const interestRows: Record<string, string[]> = {
   "p-01": ["seed-2", "seed-1", "seed-4", "seed-5", "seed-6"],
   "p-02": ["seed-3", "seed-1"],
+  "p-03": ["demo-user", "seed-5"],
 };
 
 function interestFor(pitchId: string): string[] {
@@ -466,13 +494,21 @@ export function addPollOption(pollId: string, value: string): Promise<void> {
 
 export function getPitches(): Promise<PitchesResponse> {
   const user = requireUser();
+  const today = todayIso();
+  /* Like the workflow: a cancelled pitch stays listed until its deadline. */
+  const listed = pitchRows.filter(
+    (row) =>
+      row.status === "open" ||
+      (row.status === "cancelled" && row.deadline >= today),
+  );
   return delay({
-    pitches: pitchRows.map(({ organizerSub, ...row }) => {
+    pitches: listed.map(({ organizerSub, ...row }) => {
       const interested = interestFor(row.pitchId);
       return {
         ...row,
         interested: interested.length,
         interestedByMe: interested.includes(user.sub),
+        organizedByMe: organizerSub === user.sub,
         organizer: { name: personFor(organizerSub).name },
       };
     }),
@@ -481,8 +517,7 @@ export function getPitches(): Promise<PitchesResponse> {
 
 /* The frontend validates before sending; this only rejects what the workflow
    would, so a broken form still shows up in mock mode. */
-export function createPitch(pitch: NewPitch): Promise<NewPitchResult> {
-  const user = requireUser();
+function rejectInvalid(pitch: NewPitch): void {
   if (
     !pitch.place ||
     !pitch.description ||
@@ -495,9 +530,29 @@ export function createPitch(pitch: NewPitch): Promise<NewPitchResult> {
       "Some of the pitch details are missing or invalid.",
     );
   }
+}
+
+/* The workflows' ownership check: 404 for a pitch that is missing or someone
+   else's, so the answer does not reveal which. 400 once it is closed. */
+function requireOwnOpenPitch(pitchId: string, sub: string): PitchRow {
+  const row = pitchRows.find((pitch) => pitch.pitchId === pitchId);
+  if (!row || row.organizerSub !== sub) {
+    throw new ApiError(404, "We could not find that pitch.");
+  }
+  if (row.status !== "open") {
+    throw new ApiError(400, "This pitch is closed.");
+  }
+  return row;
+}
+
+export function createPitch(pitch: NewPitch): Promise<NewPitchResult> {
+  const user = requireUser();
+  rejectInvalid(pitch);
   const pitchId = `p-${String(pitchRows.length + 1).padStart(2, "0")}`;
   pitchRows.push({
     pitchId,
+    status: "open",
+    cancelReason: "",
     place: pitch.place,
     startDate: pitch.startDate,
     endDate: pitch.endDate,
@@ -515,13 +570,48 @@ export function createPitch(pitch: NewPitch): Promise<NewPitchResult> {
   return delay({ pitchId });
 }
 
+/* Interest is kept: the people already in stay counted after an edit. */
+export function updatePitch(update: PitchUpdate): Promise<void> {
+  const user = requireUser();
+  const row = requireOwnOpenPitch(update.pitchId, user.sub);
+  rejectInvalid(update);
+  Object.assign(row, {
+    place: update.place,
+    startDate: update.startDate,
+    endDate: update.endDate,
+    description: update.description,
+    accommodationUrl: update.accommodationUrl ?? "",
+    capacity: update.capacity,
+    threshold: update.threshold,
+    deadline: update.deadline,
+    costEstimate: update.costEstimate,
+    costIncludes: update.costIncludes ?? "",
+  });
+  return delay(undefined);
+}
+
+export function cancelPitch(pitchId: string, reason: string): Promise<void> {
+  const user = requireUser();
+  const row = requireOwnOpenPitch(pitchId, user.sub);
+  if (!reason.trim()) {
+    throw new ApiError(400, "Say why you’re cancelling the pitch.");
+  }
+  row.status = "cancelled";
+  row.cancelReason = reason.trim();
+  return delay(undefined);
+}
+
 export function setPitchInterest(
   pitchId: string,
   interested: boolean,
 ): Promise<void> {
   const user = requireUser();
-  if (!pitchRows.some((row) => row.pitchId === pitchId)) {
+  const pitch = pitchRows.find((row) => row.pitchId === pitchId);
+  if (!pitch) {
     throw new ApiError(404, "We could not find that pitch.");
+  }
+  if (pitch.status !== "open") {
+    throw new ApiError(400, "This pitch is closed.");
   }
   const subs = interestFor(pitchId);
   const index = subs.indexOf(user.sub);

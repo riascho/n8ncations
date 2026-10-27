@@ -101,10 +101,18 @@ export interface RsvpResult {
    Pitches
    ---------------------------------------------------------------- */
 
-/** An open pitch. GET /pitches leaves out confirmed and expired ones: a
-    confirmed pitch is a trip in GET /workations from then on. */
+/** "cancelled" means the organizer withdrew it, with a reason. */
+export type PitchStatus = "open" | "cancelled";
+
+/** An open pitch, or a cancelled one whose deadline hasn't passed, so the
+    people interested in it can read why. GET /pitches leaves out confirmed
+    and expired ones: a confirmed pitch is a trip in GET /workations from
+    then on. */
 export interface Pitch {
   pitchId: string;
+  status: PitchStatus;
+  /** The organizer's reason when `status` is "cancelled", otherwise "". */
+  cancelReason: string;
   place: string;
   /** YYYY-MM-DD, like a trip's dates. */
   startDate: string;
@@ -126,6 +134,10 @@ export interface Pitch {
   /** Whether the caller has registered interest. Per caller, unlike
       GET /workations: it saves home a second GET /me for one boolean. */
   interestedByMe: boolean;
+  /** Whether the caller pitched it, which unlocks editing and cancelling.
+      A flag rather than the organizer's sub, which never leaves n8n. The
+      workflows check ownership again on every write. */
+  organizedByMe: boolean;
   /** Who pitched it. Display fields only, as for a trip's organizer. */
   organizer: Organizer | null;
 }
@@ -151,6 +163,20 @@ export interface NewPitch {
 
 export interface NewPitchResult {
   pitchId: string;
+}
+
+/** Body of POST /pitch-update: every field of the pitch, replaced as a
+    whole. Only the organizer of an open pitch may send it; anyone else gets
+    a 404. */
+export interface PitchUpdate extends NewPitch {
+  pitchId: string;
+}
+
+/** Body of POST /pitch-cancel. Same rule as PitchUpdate: organizer only,
+    open pitches only. */
+export interface PitchCancel {
+  pitchId: string;
+  reason: string;
 }
 
 /* ----------------------------------------------------------------

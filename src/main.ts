@@ -302,6 +302,7 @@ function mountView(): void {
   }
 
   if (view === "pitch") {
+    /* pitches.ts swaps this for "Edit your pitch" once ?edit= loads. */
     document.title = "Pitch an n8ncation — n8ncation";
     const pitch = el("[data-pitch-page]");
     if (pitch) {

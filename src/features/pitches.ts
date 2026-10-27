@@ -2,9 +2,12 @@
    interest.
 
    - Home, #pitches: one card per open pitch, with an "I'm interested"
-     toggle and progress towards the pitch's threshold.
+     toggle and progress towards the pitch's threshold. The organizer's own
+     card can also be edited or cancelled. A cancelled pitch stays listed,
+     with the organizer's reason, until its deadline.
    - /pitch: the form to submit one. The person pitching becomes the
      organizer and counts as the first interested person.
+   - /pitch?edit=<pitchId>: the same form, filled in, for the organizer.
 
    Nothing here confirms or expires a pitch. A scheduled n8n workflow does
    that once a day (see README → Pitches), so a confirmed pitch simply stops
@@ -12,7 +15,7 @@
 
 import * as api from "../api/client";
 import { ApiError } from "../api/types";
-import type { NewPitch, Pitch } from "../api/types";
+import type { NewPitch, Pitch, PitchStatus } from "../api/types";
 import { isSignedIn } from "../auth";
 import {
   formatDay,
@@ -24,12 +27,14 @@ import {
 import { requireEl, template } from "../dom";
 import { appPath } from "../paths";
 
-/* Limits shared with the workflow's validation. Change both together. */
+/* Limits shared with the validation in the /pitch, /pitch-update and
+   /pitch-cancel workflows. Change them together. */
 export const PITCH_LIMITS = {
   place: 60,
   description: 600,
   costIncludes: 200,
   accommodationUrl: 500,
+  cancelReason: 300,
   minPeople: 2,
   maxPeople: 100,
   maxCost: 10000,
@@ -40,6 +45,16 @@ const euros = new Intl.NumberFormat("en", {
   currency: "EUR",
   maximumFractionDigits: 0,
 });
+
+/* Multi-line text keeps its line breaks, unlike the one-line fields. Used
+   for the pitch description and a cancellation reason. */
+function tidyParagraph(value: string, max: number): string {
+  return value
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, max);
+}
 
 function describe(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
@@ -67,12 +82,24 @@ function safeUrl(value: string): string | null {
 
 interface PitchView {
   root: HTMLElement;
+  deadline: HTMLElement;
+  progressBox: HTMLElement;
   progress: HTMLElement;
   bar: HTMLElement;
   button: HTMLButtonElement;
+  cancelled: HTMLElement;
+  reason: HTMLElement;
+  /** The organizer's edit link and "Cancel pitch" button. */
+  owner: HTMLElement;
+  cancelOpen: HTMLButtonElement;
+  cancelForm: HTMLFormElement;
+  reasonField: HTMLTextAreaElement;
+  cancelSubmit: HTMLButtonElement;
   status: HTMLElement;
   pitch: Pitch;
   busy: boolean;
+  /** The organizer opened the cancel form. */
+  confirming: boolean;
 }
 
 function progressText(pitch: Pitch): string {
@@ -84,6 +111,22 @@ function progressText(pitch: Pitch): string {
 
 function renderPitch(v: PitchView): void {
   const { pitch } = v;
+  const cancelled = pitch.status === "cancelled";
+  v.root.classList.toggle("is-cancelled", cancelled);
+  v.deadline.textContent = cancelled
+    ? "Cancelled"
+    : `Closes ${formatDay(pitch.deadline)}`;
+  v.progressBox.hidden = cancelled;
+  v.button.hidden = cancelled;
+  v.cancelled.hidden = !cancelled;
+  v.reason.textContent = pitch.cancelReason;
+  /* Only shown to the organizer. Hiding is a convenience, not the check:
+     the workflows refuse an edit or cancel from anyone else. */
+  const canManage = pitch.organizedByMe && !cancelled;
+  v.owner.hidden = !canManage || v.confirming;
+  v.cancelForm.hidden = !canManage || !v.confirming;
+  v.cancelSubmit.disabled = v.busy;
+
   v.progress.textContent = progressText(pitch);
   const share = Math.min(1, pitch.interested / Math.max(1, pitch.threshold));
   v.bar.style.setProperty("--pct", `${Math.round(share * 100)}%`);
@@ -133,6 +176,54 @@ async function toggleInterest(v: PitchView): Promise<void> {
   }
 }
 
+async function cancelPitch(v: PitchView): Promise<void> {
+  if (v.busy) {
+    return;
+  }
+  const reason = tidyParagraph(v.reasonField.value, PITCH_LIMITS.cancelReason);
+  if (!reason) {
+    v.status.textContent = "Say why you’re cancelling the pitch.";
+    v.reasonField.focus();
+    return;
+  }
+
+  /* Optimistic like interest: the card shows as cancelled right away, stays
+     locked while the request is in flight, and reopens the form, reason
+     kept, if it fails. */
+  const previous: { status: PitchStatus; cancelReason: string } = {
+    status: v.pitch.status,
+    cancelReason: v.pitch.cancelReason,
+  };
+  v.pitch.status = "cancelled";
+  v.pitch.cancelReason = reason;
+  v.confirming = false;
+  v.busy = true;
+  renderPitch(v);
+
+  try {
+    await api.cancelPitch(v.pitch.pitchId, reason);
+    v.busy = false;
+    renderPitch(v);
+    v.status.textContent =
+      "Pitch cancelled. Everyone can see your reason until the deadline.";
+  } catch (error) {
+    v.pitch.status = previous.status;
+    v.pitch.cancelReason = previous.cancelReason;
+    v.confirming = true;
+    v.busy = false;
+    renderPitch(v);
+    v.status.textContent = describe(error, "The pitch could not be cancelled.");
+  }
+}
+
+function button(root: HTMLElement, selector: string): HTMLButtonElement {
+  const found = requireEl(root, selector);
+  if (!(found instanceof HTMLButtonElement)) {
+    throw new Error(`Expected ${selector} to be a <button>`);
+  }
+  return found;
+}
+
 function buildPitchCard(pitch: Pitch): HTMLElement {
   const card = template("pitch-template");
 
@@ -143,8 +234,6 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
 
   /* textContent throughout: every field was typed by whoever pitched it. */
   heading.textContent = pitch.place;
-  requireEl(card, ".pitch-deadline").textContent =
-    `Closes ${formatDay(pitch.deadline)}`;
   renderDateRange(
     requireEl(card, ".pitch-dates"),
     pitch.startDate,
@@ -179,29 +268,75 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
     organizer.remove();
   }
 
-  const button = requireEl(card, ".pitch-button");
-  if (!(button instanceof HTMLButtonElement)) {
-    throw new Error("Expected .pitch-button to be a <button>");
+  const cancelForm = requireEl(card, ".pitch-cancel");
+  const reasonField = requireEl(cancelForm, "textarea");
+  if (
+    !(cancelForm instanceof HTMLFormElement) ||
+    !(reasonField instanceof HTMLTextAreaElement)
+  ) {
+    throw new Error("Expected the pitch cancel form and its reason field");
   }
+  const reasonId = `pitch-${pitch.pitchId}-reason`;
+  reasonField.id = reasonId;
+  reasonField.maxLength = PITCH_LIMITS.cancelReason;
+  requireEl(cancelForm, "label").setAttribute("for", reasonId);
+
+  const owner = requireEl(card, ".pitch-owner");
+  requireEl(owner, ".pitch-edit").setAttribute(
+    "href",
+    `${appPath("/pitch")}?${new URLSearchParams({ edit: pitch.pitchId })}`,
+  );
+
   const view: PitchView = {
     root: card,
+    deadline: requireEl(card, ".pitch-deadline"),
+    progressBox: requireEl(card, ".pitch-progress"),
     progress: requireEl(card, ".pitch-progress-text"),
     bar: requireEl(card, ".pitch-bar"),
-    button,
+    button: button(card, ".pitch-button"),
+    cancelled: requireEl(card, ".pitch-cancelled"),
+    reason: requireEl(card, ".pitch-cancelled-reason"),
+    owner,
+    cancelOpen: button(owner, ".pitch-cancel-open"),
+    cancelForm,
+    reasonField,
+    cancelSubmit: button(cancelForm, "button[type=submit]"),
     status: requireEl(card, ".pitch-status"),
     pitch,
     busy: false,
+    confirming: false,
   };
   renderPitch(view);
-  button.addEventListener("click", () => {
+  view.button.addEventListener("click", () => {
     view.status.textContent = "";
     void toggleInterest(view);
+  });
+  view.cancelOpen.addEventListener("click", () => {
+    view.status.textContent = "";
+    view.confirming = true;
+    renderPitch(view);
+    reasonField.focus();
+  });
+  button(cancelForm, ".pitch-cancel-keep").addEventListener("click", () => {
+    view.status.textContent = "";
+    view.confirming = false;
+    renderPitch(view);
+    view.cancelOpen.focus();
+  });
+  cancelForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    view.status.textContent = "";
+    void cancelPitch(view);
   });
   return card;
 }
 
-/** Deadline first: the pitch that closes soonest needs attention first. */
+/** Open pitches first, then cancelled ones. Within each, deadline first:
+    the pitch that closes soonest needs attention first. */
 function byDeadline(a: Pitch, b: Pitch): number {
+  if (a.status !== b.status) {
+    return a.status === "open" ? -1 : 1;
+  }
   const left = parseDate(a.deadline);
   const right = parseDate(b.deadline);
   if (!left || !right) {
@@ -223,12 +358,12 @@ export async function mountPitches(slot: HTMLElement): Promise<void> {
   }
 
   slot.replaceChildren();
-  if (pitches.length === 0) {
+  /* Cancelled pitches don't count as open, but their cards still follow. */
+  if (!pitches.some((pitch) => pitch.status === "open")) {
     const none = document.createElement("p");
     none.className = "trip-state";
     none.textContent = "No open pitches right now. Have an idea? Pitch it.";
     slot.appendChild(none);
-    return;
   }
   for (const pitch of [...pitches].sort(byDeadline)) {
     slot.appendChild(buildPitchCard(pitch));
@@ -246,6 +381,8 @@ interface FormView {
   submit: HTMLButtonElement;
   status: HTMLElement;
   busy: boolean;
+  /** The pitch being edited, from ?edit=, or null for a new pitch. */
+  editing: string | null;
 }
 
 function input(form: HTMLFormElement, name: FieldName): HTMLInputElement {
@@ -264,17 +401,12 @@ function text(form: HTMLFormElement, name: FieldName, max: number): string {
   return input(form, name).value.replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-/* The description keeps its line breaks, unlike the one-line fields. */
 function paragraph(
   form: HTMLFormElement,
   name: FieldName,
   max: number,
 ): string {
-  return input(form, name)
-    .value.replace(/[^\S\n]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-    .slice(0, max);
+  return tidyParagraph(input(form, name).value, max);
 }
 
 function whole(form: HTMLFormElement, name: FieldName): number | null {
@@ -395,23 +527,59 @@ async function submitPitch(v: FormView): Promise<void> {
     return;
   }
 
-  /* Not optimistic: there is nothing on this page to update. The form locks
-     until the pitch is stored, then hands over to the list on home. */
+  /* Not optimistic, whether new or edited: there is nothing on this page to
+     update. The form locks until the pitch is stored, then hands over to the
+     list on home. */
   v.busy = true;
   renderForm(v);
-  v.status.textContent = "Submitting your pitch…";
+  const editing = v.editing;
+  v.status.textContent = editing
+    ? "Saving your changes…"
+    : "Submitting your pitch…";
   try {
-    await api.createPitch(result);
-    v.status.textContent = "Pitch submitted. Taking you to the list…";
+    if (editing) {
+      await api.updatePitch({ pitchId: editing, ...result });
+      v.status.textContent = "Changes saved. Taking you to the list…";
+    } else {
+      await api.createPitch(result);
+      v.status.textContent = "Pitch submitted. Taking you to the list…";
+    }
     location.assign(`${appPath("/")}#pitches`);
   } catch (error) {
     v.busy = false;
     renderForm(v);
     v.status.textContent = describe(
       error,
-      "Your pitch could not be submitted.",
+      editing
+        ? "Your changes could not be saved."
+        : "Your pitch could not be submitted.",
     );
   }
+}
+
+/* Puts a stored pitch back into the form, the reverse of readPitch(). */
+function fillForm(form: HTMLFormElement, pitch: Pitch): void {
+  input(form, "place").value = pitch.place;
+  input(form, "startDate").value = pitch.startDate;
+  input(form, "endDate").value = pitch.endDate;
+  input(form, "description").value = pitch.description;
+  input(form, "capacity").value = String(pitch.capacity);
+  input(form, "threshold").value = String(pitch.threshold);
+  input(form, "deadline").value = pitch.deadline;
+  input(form, "costEstimate").value =
+    pitch.costEstimate === null ? "" : String(pitch.costEstimate);
+  input(form, "costIncludes").value = pitch.costIncludes;
+  input(form, "accommodationUrl").value = pitch.accommodationUrl;
+}
+
+/* Swaps the page's texts from "pitch a trip" to "edit your pitch". */
+function showEditTexts(root: HTMLElement, v: FormView): void {
+  document.title = "Edit your pitch — n8ncation";
+  requireEl(root, "[data-pitch-title]").textContent = "Edit your pitch";
+  requireEl(root, "[data-pitch-intro]").textContent =
+    "Change anything about your pitch. Everyone who registered interest stays counted, so let them know about big changes such as new dates.";
+  requireEl(root, "[data-pitch-back]").textContent = "Discard changes";
+  v.submit.textContent = "Save changes";
 }
 
 export function mountPitchForm(root: HTMLElement): void {
@@ -444,6 +612,7 @@ export function mountPitchForm(root: HTMLElement): void {
     submit,
     status: requireEl(root, "[data-pitch-status]"),
     busy: false,
+    editing: new URLSearchParams(location.search).get("edit"),
   };
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -451,7 +620,11 @@ export function mountPitchForm(root: HTMLElement): void {
   });
   renderForm(v);
 
-  void revealWhenVerified(root);
+  if (v.editing) {
+    void revealForEditing(root, v, v.editing);
+  } else {
+    void revealWhenVerified(root);
+  }
 }
 
 /* The stored session is only decoded in the browser, never verified, and
@@ -467,6 +640,42 @@ async function revealWhenVerified(root: HTMLElement): Promise<void> {
     state.textContent = describe(error, "Your session could not be checked.");
     return;
   }
+  state.hidden = true;
+  body.hidden = false;
+}
+
+/* Editing does need data, the pitch itself, so GET /pitches is both the load
+   and the session check. There is no single-pitch route: the list is small
+   and already says which pitches are the caller's. The form only shows for
+   an open pitch the caller organizes; POST /pitch-update checks the same
+   thing again. */
+async function revealForEditing(
+  root: HTMLElement,
+  v: FormView,
+  pitchId: string,
+): Promise<void> {
+  const state = requireEl(root, "[data-pitch-state]");
+  const body = requireEl(root, "[data-pitch-body]");
+  state.textContent = "Loading your pitch…";
+  let pitches: Pitch[];
+  try {
+    ({ pitches } = await api.getPitches());
+  } catch (error) {
+    state.textContent = describe(error, "Your pitch could not be loaded.");
+    return;
+  }
+  const pitch = pitches.find(
+    (candidate) =>
+      candidate.pitchId === pitchId &&
+      candidate.organizedByMe &&
+      candidate.status === "open",
+  );
+  if (!pitch) {
+    state.textContent = "You can only edit an open pitch you submitted.";
+    return;
+  }
+  fillForm(v.form, pitch);
+  showEditTexts(root, v);
   state.hidden = true;
   body.hidden = false;
 }

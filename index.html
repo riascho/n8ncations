@@ -342,7 +342,9 @@
       <!-- /pitch. Wired by mountPitchForm() in src/features/pitches.ts, which
            also sets the length and number limits on these fields. The body
            stays hidden until n8n has accepted the session: this view loads
-           no data of its own, so nothing else would check the token. -->
+           no data of its own, so nothing else would check the token.
+           /pitch?edit=<pitchId> is the same form for the pitch's organizer:
+           pitches.ts swaps the texts below and fills in the fields. -->
       <section
         class="pitch-page wrap"
         id="pitch"
@@ -355,8 +357,10 @@
           Checking your session…
         </p>
         <div data-pitch-body hidden>
-          <h1 class="pitch-page-title" id="pitch-title">Pitch an n8ncation</h1>
-          <p class="detail-section-intro">
+          <h1 class="pitch-page-title" id="pitch-title" data-pitch-title>
+            Pitch an n8ncation
+          </h1>
+          <p class="detail-section-intro" data-pitch-intro>
             Suggest a place and dates. Colleagues can register interest until
             your deadline. If enough people are in, your pitch becomes an
             n8ncation the next day, with you as the organizer.
@@ -486,7 +490,10 @@
               />
             </div>
             <div class="form-actions field-wide">
-              <a class="auth-button auth-button-quiet" href="%BASE_URL%#pitches"
+              <a
+                class="auth-button auth-button-quiet"
+                href="%BASE_URL%#pitches"
+                data-pitch-back
                 >Cancel</a
               >
               <button class="button-accent" type="submit">Submit pitch</button>
@@ -644,8 +651,11 @@
           </div>
         </article>
       </template>
-      <!-- One card per open pitch, filled from GET /pitches. The bar is
-           decoration: the text beside it says the same thing. -->
+      <!-- One card per pitch, filled from GET /pitches. The bar is
+           decoration: the text beside it says the same thing. A cancelled
+           pitch swaps the progress and button for the organizer's reason.
+           The organizer's own card gets the edit and cancel controls; the
+           cancel form's label ids are set per card in pitches.ts. -->
       <template id="pitch-template">
         <article class="pitch">
           <div class="pitch-top">
@@ -683,11 +693,42 @@
             ></span>
             <p class="pitch-progress-text" role="status"></p>
           </div>
+          <div class="pitch-cancelled" hidden>
+            <p class="pitch-cancelled-label">Cancelled by the organizer</p>
+            <p class="pitch-cancelled-reason"></p>
+          </div>
           <button
             class="pitch-button"
             type="button"
             aria-pressed="false"
           ></button>
+          <div class="pitch-owner" hidden>
+            <a class="auth-button auth-button-quiet pitch-edit">Edit pitch</a>
+            <button
+              class="auth-button auth-button-quiet pitch-cancel-open"
+              type="button"
+            >
+              Cancel pitch
+            </button>
+          </div>
+          <form class="pitch-cancel" hidden>
+            <div class="field">
+              <label class="field-label">Why are you cancelling?</label>
+              <textarea name="reason" rows="3" required></textarea>
+              <p class="field-hint">
+                Everyone sees this on the card until the interest deadline.
+              </p>
+            </div>
+            <div class="form-actions">
+              <button
+                class="auth-button auth-button-quiet pitch-cancel-keep"
+                type="button"
+              >
+                Keep pitch
+              </button>
+              <button class="button-accent" type="submit">Cancel pitch</button>
+            </div>
+          </form>
           <p class="pitch-status" role="status"></p>
         </article>
       </template>

@@ -7,6 +7,7 @@ An internal site for planning n8n team workations. Colleagues sign in with their
 - share private trip logistics (dietary needs, room preference, travel times, emergency contact) that only the trip's organizer sees
 - see everyone's logistics on a trip they organize
 - pitch a trip of their own, and register interest in other pitches; a pitch with enough interest by its deadline becomes an n8ncation
+- edit or cancel a pitch they submitted, giving a reason that everyone sees on the pitch until its deadline
 - vote on which months and locations work for the next one, and suggest new locations
 - keep a small profile (team, job title) and see the trips they signed up for
 
@@ -117,7 +118,7 @@ src/
   features/
     workations.ts       Trip cards on home, the trip detail page + RSVP and waitlist, the "your trips" list on /me
     logistics.ts        On the trip page: your private logistics form, and the organizer's attendee list
-    pitches.ts          Pitch cards + interest on home, and the /pitch form
+    pitches.ts          Pitch cards + interest on home, the organizer's cancel, and the /pitch form (new or edit)
     polls.ts            Poll cards, voting, free-text suggestions
     profile.ts          The /me profile card (team, job title)
   styles/
@@ -129,10 +130,10 @@ src/
 
 | Path                | View     | What it shows when signed in                                                                                       |
 | ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `/`                 | `home`   | Upcoming and past trips, "What to expect", the polls, open pitches                                                 |
+| `/`                 | `home`   | Upcoming and past trips, "What to expect", the polls, open pitches (and cancelled ones until their deadline)       |
 | `/n8ncation/<slug>` | `detail` | One trip with the RSVP button, your logistics form once you've signed up, and the attendee list if you organize it |
 | `/me`               | `me`     | Your profile (editable team + job title) and your trips, including waitlisted ones                                 |
-| `/pitch`            | `pitch`  | The form to pitch a trip                                                                                           |
+| `/pitch`            | `pitch`  | The form to pitch a trip. With `?edit=<pitchId>`, the same form filled in, for that pitch's organizer only         |
 
 A small inline script in `<head>` sets `<html data-view="…">` before first paint. CSS hides every element whose `data-only` doesn't match the view, and `main.ts` reads `data-view` to decide what to mount. In the same way, `main.ts` sets `<html data-session="signed-in|signed-out">` at boot: elements marked `data-private` only show signed in, and elements marked `data-signed-out` (the banner) only show signed out. Before that runs, neither shows. Elements are found through `data-*` hooks, and repeated items (trip cards, poll cards, options, rows) are cloned from `<template>`s.
 
@@ -140,8 +141,9 @@ A small inline script in `<head>` sets `<html data-view="…">` before first pai
 
 - Feature modules don't import each other. Shared data goes through `main.ts`, which on `/me` loads `GET /me` and `GET /workations` once and passes them to both `profile.ts` and `workations.ts`. On the trip page, `workations.ts` reports the reader's RSVP state through a callback, and `main.ts` hands it to `logistics.ts`. Helpers more than one feature needs live outside `src/features` (`dates.ts`, `dom.ts`).
 - Every network call goes through `src/api/client.ts`. Each function there has a matching function in `mock.ts`, and both are typed by `types.ts`.
-- Everything except the intro, "What to expect" and the sign-in banner is private: the markup carries `data-private`, and it's only mounted from `mountView()` in `main.ts` once someone is signed in. Being signed in only means a token is stored, and the browser never verifies it, so each view also stays hidden until its first authenticated API call succeeds. `/pitch` loads no data, so it calls `GET /me` just for that check. A demo token left over from mock mode is dropped as soon as `VITE_API_BASE` is set.
-- Writes (votes, suggestions, RSVPs, pitch interest, profile and logistics saves) are optimistic, except creating a pitch, which has nothing on its page to update. The UI updates right away, rolls back if the request fails, and locks the control while the request is in flight. The lock matters because Data Table upserts aren't atomic (see [Scaling](#scaling-to-500-users)).
+- Everything except the intro, "What to expect" and the sign-in banner is private: the markup carries `data-private`, and it's only mounted from `mountView()` in `main.ts` once someone is signed in. Being signed in only means a token is stored, and the browser never verifies it, so each view also stays hidden until its first authenticated API call succeeds. `/pitch` loads no data, so it calls `GET /me` just for that check. In edit mode it loads `GET /pitches` instead, which is the check too. A demo token left over from mock mode is dropped as soon as `VITE_API_BASE` is set.
+- Writes (votes, suggestions, RSVPs, pitch interest, cancelling a pitch, profile and logistics saves) are optimistic, except creating or editing a pitch, which has nothing on its page to update.
+- Edit and cancel controls only show on pitches with `organizedByMe`, but that's a convenience. The real check is in the `/pitch-update` and `/pitch-cancel` workflows, which compare the pitch's `organizer` with `jwtPayload.sub` and answer 404 to anyone else. The UI updates right away, rolls back if the request fails, and locks the control while the request is in flight. The lock matters because Data Table upserts aren't atomic (see [Scaling](#scaling-to-500-users)).
 - All server and user content is inserted with `textContent`, never `innerHTML`.
 - Upcoming vs. past is computed from `endDate` against the reader's local date. There's no status column to keep in sync.
 
@@ -196,8 +198,10 @@ Each route is its own n8n workflow, named after its path (`/workations`, `/me`, 
 | GET    | `/logistics`      | JWT  | query `?workationId=`                                                            | `200 { mine: Logistics \| null }`                                                                                                                                  | `logistics` (read)                                                          |
 | POST   | `/logistics`      | JWT  | `{ workationId, dietary, roomPreference, arrival, departure, emergencyContact }` | no body                                                                                                                                                            | `signups` (read), `logistics` (upsert)                                      |
 | GET    | `/roster`         | JWT  | query `?workationId=`                                                            | `200 { people: RosterEntry[] }`, `404` unless you organize the trip                                                                                                | `workations`, `signups`, `profiles`, `logistics` (read)                     |
-| GET    | `/pitches`        | JWT  | —                                                                                | `200 { pitches: Pitch[] }`, open pitches only                                                                                                                      | `pitches`, `pitch_interest`, `profiles` (read)                              |
+| GET    | `/pitches`        | JWT  | —                                                                                | `200 { pitches: Pitch[] }`, open pitches plus cancelled ones until their deadline                                                                                  | `pitches`, `pitch_interest`, `profiles` (read)                              |
 | POST   | `/pitch`          | JWT  | `NewPitch` (see below)                                                           | `201 { pitchId }`, `400 { message }` when invalid                                                                                                                  | `pitches` (insert), `pitch_interest` (insert)                               |
+| POST   | `/pitch-update`   | JWT  | `PitchUpdate` = `NewPitch` + `pitchId`                                           | `200`, no body. `400 { message }` when invalid or closed, `404` unless you organize the pitch                                                                      | `pitches` (read/update)                                                     |
+| POST   | `/pitch-cancel`   | JWT  | `{ pitchId: string, reason: string }`                                            | `200`, no body. `400 { message }` when the reason is empty or the pitch is closed, `404` unless you organize the pitch                                             | `pitches` (read/update)                                                     |
 | POST   | `/pitch-interest` | JWT  | `{ pitchId: string, interested: boolean }`                                       | `200` added, `204` removed, no body                                                                                                                                | `pitches` (read), `pitch_interest` (upsert/delete)                          |
 | POST   | `/vote`           | JWT  | `{ pollId: string, options: string[] }`                                          | `201`, no body                                                                                                                                                     | `poll_options` (read), `votes` (upsert)                                     |
 | POST   | `/poll-option`    | JWT  | `{ pollId: string, value: string }`                                              | `201` added, `200` already existed, no body                                                                                                                        | `poll_options` (read/insert)                                                |
@@ -205,7 +209,7 @@ Each route is its own n8n workflow, named after its path (`/workations`, `/me`, 
 `Workation` = `{ workationId, slug, title, place, startDate, endDate, description, imageUrl, imageAlt, attendees, capacity: number | null, waitlisted, organizer: { name, … } | null }`.
 `Logistics` = `{ dietary, roomPreference, arrival, departure, emergencyContact }`, every field `string | null`. `arrival` and `departure` are `YYYY-MM-DDTHH:MM` in destination time.
 `RosterEntry` = `{ name, email, team, status: "going" | "waitlist", position: number | null, logistics: Logistics | null }`.
-`Pitch` = `{ pitchId, place, startDate, endDate, description, accommodationUrl, capacity, threshold, deadline, costEstimate: number | null, costIncludes, interested, interestedByMe, organizer: { name } | null }`.
+`Pitch` = `{ pitchId, status: "open" | "cancelled", cancelReason, place, startDate, endDate, description, accommodationUrl, capacity, threshold, deadline, costEstimate: number | null, costIncludes, interested, interestedByMe, organizedByMe, organizer: { name } | null }`. `cancelReason` is `""` unless cancelled.
 `NewPitch` = `{ place, startDate, endDate, description, accommodationUrl: string | null, capacity, threshold, deadline, costEstimate: number | null, costIncludes: string | null }`.
 The full contract is in `src/api/types.ts`.
 
@@ -217,8 +221,8 @@ The full contract is in `src/api/types.ts`.
 
 When `VITE_API_BASE` is empty, `client.ts` routes every call to `src/api/mock.ts`:
 
-- In-memory seed data: three trips, some votes and signups, one suggested location, two open pitches and some logistics. Roche (upcoming) has one spot left and is organized by the demo user, so it shows the attendee list. Lapland (upcoming) is full, so signing up joins the waitlist. Lisbon is past.
-- Nothing confirms or expires pitches in mock mode, since that's the scheduled workflow's job. Pages are separate documents, so a pitch submitted on `/pitch` is gone again by the time home loads.
+- In-memory seed data: three trips, some votes and signups, one suggested location, three open pitches and some logistics. Roche (upcoming) has one spot left and is organized by the demo user, so it shows the attendee list. Lapland (upcoming) is full, so signing up joins the waitlist. Lisbon is past. The demo user pitched Lake Bled, so its card has the edit and cancel controls.
+- Nothing confirms or expires pitches in mock mode, since that's the scheduled workflow's job. Pages are separate documents, so a pitch submitted or edited on `/pitch` is back to its seed state by the time home loads. Cancelling happens on home, so it stays visible until you reload.
 - **Sign in (demo)** creates a local, **unsigned** session for "Demo Colleague". n8n would reject this token; it exists only to drive the mock.
 - Every call waits about 260 ms to simulate the network. All state resets on reload, and a banner says so.
 
@@ -230,7 +234,7 @@ Use mock mode to build or review UI without touching real data. When the API con
 
 - **Add a trip:** add a row to the `workations` Data Table (columns above), or let a pitch become one. It appears on the home page right away and gets its own page at `/n8ncation/<slug>`. Once `end_date` has passed, it moves to "Past n8ncations" and the RSVP button disappears.
 - **Change a trip's capacity:** edit `capacity`. Raising it doesn't move anyone off the waitlist by itself; set the oldest waitlist rows to `going` by hand.
-- **Withdraw a pitch:** set its `status` to `expired`.
+- **Withdraw a pitch:** its organizer can cancel it from its card on home, with a reason. To remove one by hand without a reason showing, set its `status` to `expired`.
 - **Seed a poll option:** add a `poll_options` row with `created_by_sub = seed`. Also add it to `seedOptions` in `src/data/polls.ts` if it should show before results load.
 - **Remove a poll option:** delete its `poll_options` row. Existing votes for it are ignored in the counts.
 
@@ -265,11 +269,11 @@ Add the column to `profiles`, then update the `/me` workflow (in the blueprint: 
 
 **Support other currencies (potential feature)**
 
-All money amounts are in EUR for now. No currency is stored or sent: `cost_estimate` and `costEstimate` are plain numbers, and the frontend assumes euros. To allow other currencies, add a `currency` column (ISO 4217 code, such as `EUR` or `USD`) to `pitches`. Then update the `POST /pitch` validation and insert, and the `GET /pitches` response. Add `currency` to `Pitch`/`NewPitch` in `types.ts`. Update the formatter in `src/features/pitches.ts` (`euros`, hard-coded to `EUR`) and its validation message, the "Cost per person in euros" field in `index.html`, and `mock.ts`.
+All money amounts are in EUR for now. No currency is stored or sent: `cost_estimate` and `costEstimate` are plain numbers, and the frontend assumes euros. To allow other currencies, add a `currency` column (ISO 4217 code, such as `EUR` or `USD`) to `pitches`. Then update the `POST /pitch` validation and insert, the same validation and update in `POST /pitch-update`, and the `GET /pitches` response. Add `currency` to `Pitch`/`NewPitch` in `types.ts`. Update the formatter in `src/features/pitches.ts` (`euros`, hard-coded to `EUR`) and its validation message, the "Cost per person in euros" field in `index.html`, and `mock.ts`.
 
 **Design.** Any new UI follows [`n8ndesign.md`](n8ndesign.md) and uses the tokens in `src/styles/tokens.css`. Don't add raw colors, sizes or a hand-drawn logo.
 
-**Load per page view:** signed out, no view makes any calls. Signed in, home makes 4 calls (`/workations`, `/polls`, `/me`, `/pitches`). The detail page makes 2, plus `/logistics` once you're signed up and `/roster` if you organize the trip. `/me` makes 2, and `/pitch` makes 1 (`/me`, to verify the session). Each vote or RSVP adds one write. A launch announcement to all 500 people could mean around 1,500 executions within minutes.
+**Load per page view:** signed out, no view makes any calls. Signed in, home makes 4 calls (`/workations`, `/polls`, `/me`, `/pitches`). The detail page makes 2, plus `/logistics` once you're signed up and `/roster` if you organize the trip. `/me` makes 2, and `/pitch` makes 1 (`/me`, to verify the session, or `/pitches` when editing). Each vote or RSVP adds one write. A launch announcement to all 500 people could mean around 1,500 executions within minutes.
 
 Things to watch as usage grows, roughly in order:
 
