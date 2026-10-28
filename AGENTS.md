@@ -49,7 +49,7 @@ The n8n MCP is connected. Use it to check the live state before you reason about
 3. After changing, read the workflow back and check `activeVersion.sameAsDraft` before saying it's done.
 4. Approval to change the live instance covers one set of changes. Ask again for the next.
 5. Update the blueprint in `.n8n/workflows/` and `.n8n/README.md` in the same change, and generate live changes from the blueprint so the two match.
-6. New workflows go in the project `uAascgo7459L25P4`. If related to the API endpoints use the folder "API endpoints" (`r2395Of2mvIkdy5V`). Check that webhooks use the JWT Auth account credential (`EF3FVWn29g6p0qdG`).
+6. New workflows go in the project `uAascgo7459L25P4`. If related to the API endpoints use the folder "API endpoints" (`r2395Of2mvIkdy5V`). Check that webhooks use the JWT Auth account credential (`EF3FVWn29g6p0qdG`). Set the error workflow to "🪲 Error Notifier - Slack" (`NQAi3FG6eVyC716s`) with `settings.errorWorkflow`, in the blueprint and on the live workflow.
 7. Read execution results with `search_workflow_executions` and `get_workflow_execution`, and check a real execution before saying a route works. Test runs have no session JWT, so they can't exercise the JWT Auth path. If no real execution confirms a change, say the route is untested rather than implying it was tested.
 
 ## After every change
