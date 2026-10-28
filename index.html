@@ -145,6 +145,23 @@
             <p class="dates" data-detail-dates></p>
           </div>
           <p class="detail-description" data-detail-description></p>
+          <!-- Carried over from the pitch the trip started as. Filled by
+               fillFacts() in src/features/workations.ts. -->
+          <dl class="pitch-facts detail-facts" data-detail-facts hidden>
+            <div data-detail-fact="cost">
+              <dt>Estimated cost</dt>
+              <dd>
+                <span data-detail-cost></span>
+                <span class="pitch-includes" data-detail-includes></span>
+              </dd>
+            </div>
+            <div data-detail-fact="stay">
+              <dt>Accommodation</dt>
+              <dd>
+                <a target="_blank" rel="noopener noreferrer">See the place</a>
+              </dd>
+            </div>
+          </dl>
           <p class="detail-organizer" data-detail-organizer hidden></p>
           <div class="detail-rsvp" data-detail-rsvp>
             <p class="detail-attendees" data-detail-attendees role="status"></p>
@@ -522,6 +539,50 @@
                 placeholder="https://"
               />
             </div>
+            <!-- The photo is a link to an image already online; nothing is
+                 uploaded. pitches.ts loads it into the preview as a check,
+                 because only a link that loads as an image can be saved. -->
+            <div class="field field-wide">
+              <label class="field-label" for="pitch-image">Photo link</label>
+              <input
+                id="pitch-image"
+                name="imageUrl"
+                type="url"
+                autocomplete="off"
+                placeholder="https://"
+                aria-describedby="pitch-image-hint pitch-image-status"
+              />
+              <p class="field-hint" id="pitch-image-hint">
+                Optional. On the accommodation’s website, right-click a photo of
+                the place and choose “Copy image address”.
+              </p>
+              <p
+                class="field-hint"
+                id="pitch-image-status"
+                data-pitch-photo-status
+                role="status"
+              ></p>
+              <div class="pitch-preview" data-pitch-preview hidden>
+                <img alt="" referrerpolicy="no-referrer" />
+              </div>
+            </div>
+            <div class="field field-wide">
+              <label class="field-label" for="pitch-image-alt"
+                >Photo description</label
+              >
+              <input
+                id="pitch-image-alt"
+                name="imageAlt"
+                type="text"
+                autocomplete="off"
+                placeholder="The terrace of the townhouse, looking over the river"
+                aria-describedby="pitch-image-alt-hint"
+              />
+              <p class="field-hint" id="pitch-image-alt-hint">
+                What the photo shows, for people using a screen reader. Needed
+                when you add a photo.
+              </p>
+            </div>
             <div class="form-actions field-wide">
               <a
                 class="auth-button auth-button-quiet"
@@ -727,6 +788,15 @@
            cancel form's label ids are set per card in pitches.ts. -->
       <template id="pitch-template">
         <article class="pitch">
+          <div class="pitch-photo">
+            <img
+              alt=""
+              width="1440"
+              height="960"
+              loading="lazy"
+              referrerpolicy="no-referrer"
+            />
+          </div>
           <div class="pitch-top">
             <h3 class="pitch-place"></h3>
             <span class="status pitch-deadline"></span>

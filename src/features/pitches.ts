@@ -27,6 +27,7 @@ import {
   todayIso,
 } from "../dates";
 import { requireEl, template } from "../dom";
+import { euros, httpsUrl, safeUrl } from "../format";
 import { appPath } from "../paths";
 
 /* Limits shared with the validation in the /pitch, /pitch-update and
@@ -36,17 +37,14 @@ export const PITCH_LIMITS = {
   description: 600,
   costIncludes: 200,
   accommodationUrl: 500,
+  /* Image links from big hosting sites carry long query strings. */
+  imageUrl: 1000,
+  imageAlt: 150,
   cancelReason: 300,
   minPeople: 2,
   maxPeople: 100,
   maxCost: 10000,
 } as const;
-
-const euros = new Intl.NumberFormat("en", {
-  style: "currency",
-  currency: "EUR",
-  maximumFractionDigits: 0,
-});
 
 /* Multi-line text keeps its line breaks, unlike the one-line fields. Used
    for the pitch description and a cancellation reason. */
@@ -63,19 +61,6 @@ function describe(error: unknown, fallback: string): string {
     return error.message;
   }
   return fallback;
-}
-
-/* Only http(s) links become hrefs. A pitch is typed by a colleague, and a
-   javascript: URL in an href would run on click. */
-function safeUrl(value: string): string | null {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:"
-      ? url.href
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 /** The organizer's edit form for one pitch, linked from its card and /me. */
@@ -231,6 +216,14 @@ function button(root: HTMLElement, selector: string): HTMLButtonElement {
   return found;
 }
 
+function image(root: HTMLElement, selector: string): HTMLImageElement {
+  const found = requireEl(root, selector);
+  if (!(found instanceof HTMLImageElement)) {
+    throw new Error(`Expected ${selector} to be an <img>`);
+  }
+  return found;
+}
+
 function buildPitchCard(pitch: Pitch): HTMLElement {
   const card = template("pitch-template");
 
@@ -238,6 +231,22 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
   const heading = requireEl(card, ".pitch-place");
   heading.id = titleId;
   card.setAttribute("aria-labelledby", titleId);
+
+  /* A link to a photo hosted elsewhere. Without one, or once the link turns
+     out broken (the listing was taken down, the URL expired), the card is
+     simply shown without a photo. */
+  const photoBox = requireEl(card, ".pitch-photo");
+  const photo = photoBox.querySelector("img");
+  const photoUrl = pitch.imageUrl ? httpsUrl(pitch.imageUrl) : null;
+  if (photo && photoUrl) {
+    photo.addEventListener("error", () => {
+      photoBox.remove();
+    });
+    photo.src = photoUrl;
+    photo.alt = pitch.imageAlt;
+  } else {
+    photoBox.remove();
+  }
 
   /* textContent throughout: every field was typed by whoever pitched it. */
   heading.textContent = pitch.place;
@@ -485,6 +494,21 @@ export function renderMyPitches(slot: HTMLElement, pitches: Pitch[]): void {
 
 type FieldName = keyof NewPitch;
 
+/* The photo is a link to an image hosted elsewhere. The browser cannot read
+   a third-party image's content type (CORS), so the only way to tell an
+   image link from a link to a web page is to load it: "loaded" is the one
+   state a pitch can be submitted in, apart from "none". */
+type PhotoState = "none" | "invalid" | "loading" | "loaded" | "broken";
+
+interface PhotoCheck {
+  /** The trimmed link this state belongs to. */
+  url: string;
+  state: PhotoState;
+}
+
+const PHOTO_BROKEN =
+  "This link doesn’t open an image. On the website, right-click the photo and choose “Copy image address”.";
+
 interface FormView {
   form: HTMLFormElement;
   submit: HTMLButtonElement;
@@ -492,6 +516,10 @@ interface FormView {
   busy: boolean;
   /** The pitch being edited, from ?edit=, or null for a new pitch. */
   editing: string | null;
+  photo: PhotoCheck;
+  preview: HTMLElement;
+  previewImage: HTMLImageElement;
+  photoStatus: HTMLElement;
 }
 
 function input(form: HTMLFormElement, name: FieldName): HTMLInputElement {
@@ -534,8 +562,12 @@ interface Problem {
 
 /* Returns the pitch to send, or the first problem to show. The browser's own
    checks (required, min, max) run first; these are the rules that span
-   fields. The workflow repeats all of them. */
-function readPitch(form: HTMLFormElement): NewPitch | Problem {
+   fields. The workflow repeats all of them, except that the photo loads,
+   which only a browser can check. */
+function readPitch(
+  form: HTMLFormElement,
+  photo: PhotoCheck,
+): NewPitch | Problem {
   const today = todayIso();
   const place = text(form, "place", PITCH_LIMITS.place);
   const description = paragraph(form, "description", PITCH_LIMITS.description);
@@ -547,6 +579,8 @@ function readPitch(form: HTMLFormElement): NewPitch | Problem {
   const costEstimate = whole(form, "costEstimate");
   const url = text(form, "accommodationUrl", PITCH_LIMITS.accommodationUrl);
   const costIncludes = text(form, "costIncludes", PITCH_LIMITS.costIncludes);
+  const image = input(form, "imageUrl").value.trim();
+  const imageAlt = text(form, "imageAlt", PITCH_LIMITS.imageAlt);
 
   if (!place) {
     return { field: "place", message: "Add a place." };
@@ -610,6 +644,29 @@ function readPitch(form: HTMLFormElement): NewPitch | Problem {
       message: "Use a full link starting with https://.",
     };
   }
+  if (image) {
+    if (!httpsUrl(image) || image.length > PITCH_LIMITS.imageUrl) {
+      return {
+        field: "imageUrl",
+        message: "Use a photo link starting with https://.",
+      };
+    }
+    if (photo.url !== image || photo.state === "loading") {
+      return {
+        field: "imageUrl",
+        message: "The photo is still loading. Try again in a moment.",
+      };
+    }
+    if (photo.state === "broken") {
+      return { field: "imageUrl", message: PHOTO_BROKEN };
+    }
+    if (!imageAlt) {
+      return {
+        field: "imageAlt",
+        message: "Describe the photo for people using a screen reader.",
+      };
+    }
+  }
 
   return {
     place,
@@ -617,6 +674,9 @@ function readPitch(form: HTMLFormElement): NewPitch | Problem {
     endDate,
     description,
     accommodationUrl: url || null,
+    /* A description without a photo describes nothing, so it is dropped. */
+    imageUrl: image || null,
+    imageAlt: image ? imageAlt : null,
     capacity,
     threshold,
     deadline,
@@ -630,11 +690,59 @@ function renderForm(v: FormView): void {
   v.form.classList.toggle("is-busy", v.busy);
 }
 
+function renderPhoto(v: FormView): void {
+  const { url, state } = v.photo;
+  const src = state === "loaded" ? httpsUrl(url) : null;
+  v.preview.hidden = src === null;
+  if (src) {
+    v.previewImage.src = src;
+  } else {
+    v.previewImage.removeAttribute("src");
+  }
+  v.photoStatus.textContent =
+    state === "loading"
+      ? "Checking the photo…"
+      : state === "invalid"
+        ? "Use a photo link starting with https://."
+        : state === "broken"
+          ? PHOTO_BROKEN
+          : "";
+}
+
+/* Loads the link in the background, without a Referer like the cards,
+   so a site that blocks hotlinking fails here rather than on the card.
+   A result for a link that has since been edited is dropped. */
+function checkPhoto(v: FormView): void {
+  const url = input(v.form, "imageUrl").value.trim();
+  if (url === v.photo.url) {
+    return;
+  }
+  const src = url ? httpsUrl(url) : null;
+  v.photo = { url, state: !url ? "none" : src ? "loading" : "invalid" };
+  renderPhoto(v);
+  if (!src) {
+    return;
+  }
+  const probe = new Image();
+  probe.referrerPolicy = "no-referrer";
+  const settle = (state: PhotoState) => (): void => {
+    if (v.photo.url === url) {
+      v.photo = { url, state };
+      renderPhoto(v);
+    }
+  };
+  probe.addEventListener("load", settle("loaded"));
+  probe.addEventListener("error", settle("broken"));
+  probe.src = src;
+}
+
 async function submitPitch(v: FormView): Promise<void> {
   if (v.busy) {
     return;
   }
-  const result = readPitch(v.form);
+  /* Picks up a link typed or pasted just before submitting. */
+  checkPhoto(v);
+  const result = readPitch(v.form, v.photo);
   if ("field" in result) {
     v.status.textContent = result.message;
     input(v.form, result.field).focus();
@@ -685,6 +793,8 @@ function fillForm(form: HTMLFormElement, pitch: Pitch): void {
     pitch.costEstimate === null ? "" : String(pitch.costEstimate);
   input(form, "costIncludes").value = pitch.costIncludes;
   input(form, "accommodationUrl").value = pitch.accommodationUrl;
+  input(form, "imageUrl").value = pitch.imageUrl;
+  input(form, "imageAlt").value = pitch.imageAlt;
 }
 
 /* Swaps the page's texts from "pitch a trip" to "edit your pitch". */
@@ -712,6 +822,8 @@ export function mountPitchForm(root: HTMLElement): void {
   input(form, "description").maxLength = PITCH_LIMITS.description;
   input(form, "costIncludes").maxLength = PITCH_LIMITS.costIncludes;
   input(form, "accommodationUrl").maxLength = PITCH_LIMITS.accommodationUrl;
+  input(form, "imageUrl").maxLength = PITCH_LIMITS.imageUrl;
+  input(form, "imageAlt").maxLength = PITCH_LIMITS.imageAlt;
   for (const name of ["capacity", "threshold"] as const) {
     input(form, name).min = String(PITCH_LIMITS.minPeople);
     input(form, name).max = String(PITCH_LIMITS.maxPeople);
@@ -728,10 +840,28 @@ export function mountPitchForm(root: HTMLElement): void {
     status: requireEl(root, "[data-pitch-status]"),
     busy: false,
     editing: new URLSearchParams(location.search).get("edit"),
+    photo: { url: "", state: "none" },
+    preview: requireEl(root, "[data-pitch-preview]"),
+    previewImage: image(root, "[data-pitch-preview] img"),
+    photoStatus: requireEl(root, "[data-pitch-photo-status]"),
   };
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     void submitPitch(v);
+  });
+  /* Checked once typing pauses, and right away on paste or leaving the
+     field (change). */
+  let photoTimer: number | undefined;
+  const photoField = input(form, "imageUrl");
+  photoField.addEventListener("input", () => {
+    window.clearTimeout(photoTimer);
+    photoTimer = window.setTimeout(() => {
+      checkPhoto(v);
+    }, 400);
+  });
+  photoField.addEventListener("change", () => {
+    window.clearTimeout(photoTimer);
+    checkPhoto(v);
   });
   renderForm(v);
 
@@ -790,6 +920,7 @@ async function revealForEditing(
     return;
   }
   fillForm(v.form, pitch);
+  checkPhoto(v);
   showEditTexts(root, v);
   state.hidden = true;
   body.hidden = false;

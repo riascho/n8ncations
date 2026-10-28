@@ -122,6 +122,11 @@ const workationRows: WorkationRow[] = [
       "Our first n8ncation. A week together in a villa on the Andalusian coast, with space to work and the beach nearby.",
     imageUrl: "/villa.jpeg",
     imageAlt: "The pool and sunny terrace at Villa Alemania in Roche, Spain",
+    /* Carried over from its pitch, so the trip page's facts show. The other
+       two have none, which hides them. */
+    accommodationUrl: "https://example.com/villa-alemania",
+    costEstimate: 700,
+    costIncludes: "The villa, a coworking corner and daily breakfast",
     capacity: 6,
     organizerSub: "demo-user",
   },
@@ -136,6 +141,9 @@ const workationRows: WorkationRow[] = [
       "A winter week in a cabin near Rovaniemi. Short days, a shared sauna and, with luck, the northern lights.",
     imageUrl: "/villa.jpeg",
     imageAlt: "Placeholder photo standing in for the Lapland trip",
+    accommodationUrl: "",
+    costEstimate: null,
+    costIncludes: "",
     capacity: 4,
     organizerSub: "seed-organizer",
   },
@@ -150,6 +158,9 @@ const workationRows: WorkationRow[] = [
       "A long weekend that started the whole idea. Six people, one apartment, and the first version of this site.",
     imageUrl: "/villa.jpeg",
     imageAlt: "Placeholder photo standing in for the Lisbon trip",
+    accommodationUrl: "",
+    costEstimate: null,
+    costIncludes: "",
     capacity: null,
     /* No organizer, so the trip page's hidden-line path gets exercised. */
     organizerSub: null,
@@ -255,6 +266,8 @@ const pitchRows: PitchRow[] = [
     description:
       "A townhouse by the river with a big table for working and a terrace for evenings. Direct flights from most European hubs.",
     accommodationUrl: "https://example.com/porto-townhouse",
+    imageUrl: "",
+    imageAlt: "",
     capacity: 10,
     threshold: 8,
     deadline: "2026-12-15",
@@ -272,6 +285,8 @@ const pitchRows: PitchRow[] = [
     description:
       "A shorter trip on the west coast. Mornings at work, afternoons on the coast or in town.",
     accommodationUrl: "",
+    imageUrl: "",
+    imageAlt: "",
     /* No limit, so the card's "No limit" path gets exercised. */
     capacity: null,
     threshold: 6,
@@ -290,6 +305,8 @@ const pitchRows: PitchRow[] = [
     description:
       "A guesthouse on the lake with fast wifi and a big shared kitchen. Ljubljana airport is 40 minutes away.",
     accommodationUrl: "https://example.com/bled-guesthouse",
+    imageUrl: "",
+    imageAlt: "",
     capacity: 8,
     threshold: 5,
     deadline: "2027-01-15",
@@ -307,6 +324,8 @@ const pitchRows: PitchRow[] = [
     description:
       "A week in the old town in early autumn, with a coworking space by the harbour.",
     accommodationUrl: "",
+    imageUrl: "",
+    imageAlt: "",
     capacity: 8,
     threshold: 6,
     deadline: "2026-09-15",
@@ -324,6 +343,8 @@ const pitchRows: PitchRow[] = [
     description:
       "A week together in a villa on the Andalusian coast, with space to work and the beach nearby.",
     accommodationUrl: "",
+    imageUrl: "",
+    imageAlt: "",
     capacity: 6,
     threshold: 4,
     deadline: "2026-08-31",
@@ -562,7 +583,12 @@ function rejectInvalid(pitch: NewPitch): void {
     !pitch.description ||
     (pitch.capacity !== null && pitch.threshold > pitch.capacity) ||
     pitch.startDate > pitch.endDate ||
-    pitch.deadline >= pitch.startDate
+    pitch.deadline >= pitch.startDate ||
+    /* A photo is an https link, up to 1,000 characters, with a description. */
+    (pitch.imageUrl !== null &&
+      (!pitch.imageUrl.startsWith("https://") ||
+        pitch.imageUrl.length > 1000 ||
+        !pitch.imageAlt))
   ) {
     throw new ApiError(
       400,
@@ -597,6 +623,8 @@ export function createPitch(pitch: NewPitch): Promise<NewPitchResult> {
     endDate: pitch.endDate,
     description: pitch.description,
     accommodationUrl: pitch.accommodationUrl ?? "",
+    imageUrl: pitch.imageUrl ?? "",
+    imageAlt: pitch.imageAlt ?? "",
     capacity: pitch.capacity,
     threshold: pitch.threshold,
     deadline: pitch.deadline,
@@ -620,6 +648,8 @@ export function updatePitch(update: PitchUpdate): Promise<void> {
     endDate: update.endDate,
     description: update.description,
     accommodationUrl: update.accommodationUrl ?? "",
+    imageUrl: update.imageUrl ?? "",
+    imageAlt: update.imageAlt ?? "",
     capacity: update.capacity,
     threshold: update.threshold,
     deadline: update.deadline,

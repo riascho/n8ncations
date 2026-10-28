@@ -1751,7 +1751,50 @@ footer > span {
   padding: var(--space-32);
   border: 1px solid var(--stroke-secondary);
   border-radius: var(--radius-lg);
+  overflow: hidden;
   background: var(--background-primary);
+}
+
+/* The pitch's photo link, across the top like a trip card's photo: the
+   negative margins cancel the card's padding. */
+.pitch-photo {
+  aspect-ratio: 3 / 2;
+  margin: calc(var(--space-32) * -1) calc(var(--space-32) * -1) var(--space-24);
+  overflow: hidden;
+  background: var(--background-tertiary);
+}
+
+.pitch-photo img,
+.pitch-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The photo link's preview on /pitch, cropped like the card will be. */
+.pitch-preview {
+  max-width: 392px;
+  aspect-ratio: 3 / 2;
+  margin-top: var(--space-12);
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--background-tertiary);
+}
+
+.pitch-preview[hidden],
+.field-hint:empty {
+  display: none;
+}
+
+/* The trip page's cost and accommodation, laid out like a pitch card's. */
+.detail-facts {
+  max-width: 640px;
+}
+
+.detail-facts[hidden],
+.detail-facts > div[hidden] {
+  display: none;
 }
 
 .pitch-top {
@@ -2071,6 +2114,11 @@ footer > span {
 
   .pitch {
     padding: var(--space-24);
+  }
+
+  .pitch-photo {
+    margin: calc(var(--space-24) * -1) calc(var(--space-24) * -1)
+      var(--space-24);
   }
 }
 

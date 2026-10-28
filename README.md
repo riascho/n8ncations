@@ -108,6 +108,7 @@ src/
   auth.ts               Google sign-in (popup + redirect fallback), session storage, JWT decoding for display
   dates.ts              Date parsing and display shared by trips, pitches and logistics
   dom.ts                template() / requireEl() helpers
+  format.ts             The euros formatter and link checks (safeUrl, https-only httpsUrl) shared by pitches and trips
   paths.ts              Base-path-aware app and asset URLs
   api/
     client.ts           The only module that talks to n8n; falls through to mock.ts when VITE_API_BASE is empty
@@ -142,7 +143,7 @@ A small inline script in `<head>` sets `<html data-view="…">` before first pai
 
 **Conventions worth keeping:**
 
-- Feature modules don't import each other. Shared data goes through `main.ts`, which on `/me` loads `GET /me` and `GET /workations` once and passes them to both `profile.ts` and `workations.ts`. It loads `GET /pitches` for the same page separately and passes it to `pitches.ts` for "your pitches". On the trip page, `workations.ts` reports the reader's RSVP state through a callback, and `main.ts` hands it to `logistics.ts`. Helpers more than one feature needs live outside `src/features` (`dates.ts`, `dom.ts`).
+- Feature modules don't import each other. Shared data goes through `main.ts`, which on `/me` loads `GET /me` and `GET /workations` once and passes them to both `profile.ts` and `workations.ts`. It loads `GET /pitches` for the same page separately and passes it to `pitches.ts` for "your pitches". On the trip page, `workations.ts` reports the reader's RSVP state through a callback, and `main.ts` hands it to `logistics.ts`. Helpers more than one feature needs live outside `src/features` (`dates.ts`, `dom.ts`, `format.ts`).
 - Every network call goes through `src/api/client.ts`. Each function there has a matching function in `mock.ts`, and both are typed by `types.ts`.
 - Everything except the intro, "What to expect" and the sign-in banner is private: the markup carries `data-private`, and it's only mounted from `mountView()` in `main.ts` once someone is signed in. Being signed in only means a token is stored, and the browser never verifies it, so each view also stays hidden until its first authenticated API call succeeds. `/pitch` loads no data, so it calls `GET /me` just for that check. In edit mode it loads `GET /pitches` instead, which is the check too. A demo token left over from mock mode is dropped as soon as `VITE_API_BASE` is set.
 - Writes (votes, suggestions, RSVPs, pitch interest, cancelling a pitch, profile and logistics saves) are optimistic, except creating or editing a pitch, which has nothing on its page to update.
@@ -164,7 +165,7 @@ Sign-in uses Google OAuth 2.0 (authorization code flow), with an n8n workflow as
    1. exchanges the code at `https://oauth2.googleapis.com/token` (HTTP Request node "request access_token", which sends the client ID and secret as HTTP Basic auth from the "Google Client" credential)
    2. decodes the identity claims from the returned `id_token`
    3. upserts the user into the `profiles` table (matched on `user_sub`), refreshing `email`, `name` and `picture` on every sign-in
-   4. signs a session JWT (JWT node, `jwtAuth` credential) with claims `sub`, `email`, `name`, `picture`, `iat` and `exp` (**30 days**)
+   4. signs a session JWT ("Generate JWT" node, `jwtAuth` credential) with claims `sub`, `email`, `name`, `picture`, `iat` and `exp` (**30 days**)
    5. redirects to `<site-origin>/#session=<jwt>&state=<state>`
 4. Back on the site, the popup passes the fragment to its opener with `postMessage` (same origin only) and closes. The opener checks `state` against `sessionStorage` (CSRF protection), checks `exp`, and stores the JWT in `localStorage` under `n8ncation.session.v1`. The redirect fallback does the same checks on page load and then returns to the page where sign-in started.
 5. Every API call sends `Authorization: Bearer <jwt>`. Every API webhook uses **JWT Auth** with the same `jwtAuth` credential, and the workflows take the user's identity only from `jwtPayload.sub`.
@@ -182,7 +183,7 @@ When moving to a new Google client, n8n instance or site URL:
   - "Google Client" credential (HTTP Basic Auth): the OAuth client ID as user, the client secret as password. "request access_token" uses it.
   - Instance variable `SITE_URL` (the site origin, no trailing slash). The "Success" and "Failure" nodes redirect to it.
   - "request access_token" node: `redirect_uri` must be the same callback URL.
-- **n8n `jwtAuth` credential (HS256 secret):** the JWT node and every API webhook must use the same credential. Rotating the secret signs everyone out.
+- **n8n `jwtAuth` credential (HS256 secret):** the "Generate JWT" node and every API webhook must use the same credential. Rotating the secret signs everyone out.
 - **Frontend:** `VITE_GOOGLE_CLIENT_ID` and `VITE_OAUTH_REDIRECT`, then rebuild.
 
 ---
@@ -209,11 +210,12 @@ Each route is its own n8n workflow, named after its path (`/workations`, `/me`, 
 | POST   | `/vote`           | JWT  | `{ pollId: string, options: string[] }`                                          | `201`, no body                                                                                                                                                     | `poll_options` (read), `votes` (upsert)                                     |
 | POST   | `/poll-option`    | JWT  | `{ pollId: string, value: string }`                                              | `201` added, `200` already existed, no body                                                                                                                        | `poll_options` (read/insert)                                                |
 
-`Workation` = `{ workationId, slug, title, place, startDate, endDate, description, imageUrl, imageAlt, attendees, capacity: number | null, waitlisted, organizer: { name, … } | null }`.
+`Workation` = `{ workationId, slug, title, place, startDate, endDate, description, imageUrl, imageAlt, accommodationUrl, costEstimate: number | null, costIncludes, attendees, capacity: number | null, waitlisted, organizer: { name, … } | null }`. For a trip that started as a pitch, the photo, accommodation link and cost are copied over from the pitch.
 `Logistics` = `{ dietary, roomPreference, arrival, departure, emergencyContact }`, every field `string | null`. `arrival` and `departure` are `YYYY-MM-DDTHH:MM` in destination time.
 `RosterEntry` = `{ name, email, team, status: "going" | "waitlist", position: number | null, logistics: Logistics | null }`.
-`Pitch` = `{ pitchId, status: "open" | "cancelled" | "confirmed" | "expired", cancelReason, place, startDate, endDate, description, accommodationUrl, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes, interested, interestedByMe, organizedByMe, organizer: { name } | null }`. `cancelReason` is `""` unless cancelled. `/pitches` shows only open pitches and cancelled ones before their deadline; your other pitches are only for `/me`.
-`NewPitch` = `{ place, startDate, endDate, description, accommodationUrl: string | null, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes: string | null }`.
+`Pitch` = `{ pitchId, status: "open" | "cancelled" | "confirmed" | "expired", cancelReason, place, startDate, endDate, description, accommodationUrl, imageUrl, imageAlt, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes, interested, interestedByMe, organizedByMe, organizer: { name } | null }`. `cancelReason` is `""` unless cancelled. `/pitches` shows only open pitches and cancelled ones before their deadline; your other pitches are only for `/me`.
+`NewPitch` = `{ place, startDate, endDate, description, accommodationUrl: string | null, imageUrl: string | null, imageAlt: string | null, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes: string | null }`.
+**Photos are links, never uploads.** `imageUrl` is an `https` link to an image already online, usually copied from the accommodation's website ("Copy image address"), so only the URL is stored. The pitch form loads the link before it can be submitted, because only a browser can tell an image link from a link to a web page. Photos are shown with `referrerpolicy="no-referrer"`, since many sites refuse images embedded elsewhere when they see a Referer. A link that breaks later (the listing is taken down, or the URL expires) falls back to the grey photo area. Loading a photo tells its host the viewer's IP address, but not which page they're on.
 The full contract is in `src/api/types.ts`.
 
 **Errors.** `client.ts` turns any non-2xx response into an `ApiError`. A 401 or 403 is shown as "session expired, sign in again". Otherwise a JSON body's `message` is shown when present. Network and CORS failures appear as "Could not reach the server". Empty 200/201/204 responses are accepted for writes.
@@ -224,7 +226,7 @@ The full contract is in `src/api/types.ts`.
 
 When `VITE_API_BASE` is empty, `client.ts` routes every call to `src/api/mock.ts`:
 
-- In-memory seed data: three trips, some votes and signups, one suggested location, three open pitches and some logistics. Roche (upcoming) has one spot left and is organized by the demo user, so it shows the attendee list. Lapland (upcoming) is full, so signing up joins the waitlist. Lisbon is past. The demo user pitched Lake Bled, so its card has the edit and cancel controls, and it is listed under "Your pitches" on `/me`, along with two closed demo pitches (Tallinn expired, Roche went ahead) folded away below.
+- In-memory seed data: three trips, some votes and signups, one suggested location, three open pitches and some logistics. Roche (upcoming) has one spot left and is organized by the demo user, so it shows the attendee list. Lapland (upcoming) is full, so signing up joins the waitlist. Lisbon is past. Roche also carries an accommodation link and a cost, as a confirmed pitch would, so its page shows them; the other two show neither. No seed pitch has a photo, because a photo must be an `https` link and the mock runs on `http://localhost`; paste any https image link into the form to try it. The demo user pitched Lake Bled, so its card has the edit and cancel controls, and it is listed under "Your pitches" on `/me`, along with two closed demo pitches (Tallinn expired, Roche went ahead) folded away below.
 - Nothing confirms or expires pitches in mock mode, since that's the scheduled workflow's job. Pages are separate documents, so a pitch submitted or edited on `/pitch` is back to its seed state by the time `/pitches` loads. Cancelling happens on `/pitches`, so it stays visible until you reload.
 - **Sign in (demo)** creates a local, **unsigned** session for "Demo Colleague". n8n would reject this token; it exists only to drive the mock.
 - Every call waits about 260 ms to simulate the network. All state resets on reload, and a banner says so.
@@ -251,7 +253,7 @@ Use mock mode to build or review UI without touching real data. When the API con
 2. Add its seed rows to `poll_options` with the same `poll_id`.
 3. Optionally seed votes for it in `mock.ts`.
 
-`GET /polls`, `POST /vote` and the `/me` blueprint in `.n8n/workflows/me.json` are generic over `poll_id` and need no changes. The live `/me` workflow isn't yet: its "Aggregate Votes" node maps only `month` and `location` (see `.n8n/DISCREPANCIES.md`).
+`GET /polls`, `POST /vote` and `/me` are generic over `poll_id` and need no changes.
 
 **Add an API endpoint**
 
@@ -268,11 +270,11 @@ Use mock mode to build or review UI without touching real data. When the API con
 
 **Add a profile field**
 
-Add the column to `profiles`, then update the `/me` workflow (in the blueprint: "Tidy profile update", "Update profile" and "Build me"), `Me`/`ProfileUpdate` in `types.ts`, the form in `index.html`, `src/features/profile.ts`, and `mock.ts`.
+Add the column to `profiles`, then update the `/me` workflow (in the blueprint: "Tidy profile update", "Update profile" and "Build /ME"), `Me`/`ProfileUpdate` in `types.ts`, the form in `index.html`, `src/features/profile.ts`, and `mock.ts`.
 
 **Support other currencies (potential feature)**
 
-All money amounts are in EUR for now. No currency is stored or sent: `cost_estimate` and `costEstimate` are plain numbers, and the frontend assumes euros. To allow other currencies, add a `currency` column (ISO 4217 code, such as `EUR` or `USD`) to `pitches`. Then update the `POST /pitch` validation and insert, the same validation and update in `POST /pitch-update`, and the `GET /pitches` response. Add `currency` to `Pitch`/`NewPitch` in `types.ts`. Update the formatter in `src/features/pitches.ts` (`euros`, hard-coded to `EUR`) and its validation message, the "Cost per person in euros" field in `index.html`, and `mock.ts`.
+All money amounts are in EUR for now. No currency is stored or sent: `cost_estimate` and `costEstimate` are plain numbers, and the frontend assumes euros. To allow other currencies, add a `currency` column (ISO 4217 code, such as `EUR` or `USD`) to `pitches` and `workations`. Then update the `POST /pitch` validation and insert, the same validation and update in `POST /pitch-update`, the `GET /pitches` and `GET /workations` responses, and the copy in "Pitch decisions". Add `currency` to `Pitch`/`NewPitch`/`Workation` in `types.ts`. Update the formatter in `src/format.ts` (`euros`, hard-coded to `EUR`) and its validation message, the "Cost per person in euros" field in `index.html`, and `mock.ts`.
 
 **Design.** Any new UI follows [`n8ndesign.md`](n8ndesign.md) and uses the tokens in `src/styles/tokens.css`. Don't add raw colors, sizes or a hand-drawn logo.
 
@@ -280,12 +282,11 @@ All money amounts are in EUR for now. No currency is stored or sent: `cost_estim
 
 Things to watch as usage grows, roughly in order:
 
-1. **`GET /polls` query fan-out.** In the live workflow, "Get options" runs once per vote row (it's fed by "Get votes"), so the number of Data Table queries grows with the number of votes. The blueprint in `.n8n/workflows/get-polls.json` reads the options first and the votes once.
-2. **`GET /workations` reads all of `profiles`** on every call just to resolve organizer names. Filter to the organizer subs, or store the organizer's display name on the trip.
-3. **Concurrency.** Webhook executions queue under the instance's concurrency limit, so a burst slows every endpoint, including sign-in. Options:
+1. **`GET /workations` reads all of `profiles`** on every call just to resolve organizer names. Filter to the organizer subs, or store the organizer's display name on the trip.
+2. **Concurrency.** Webhook executions queue under the instance's concurrency limit, so a burst slows every endpoint, including sign-in. Options:
    - cache the results of `GET /workations` and `GET /polls` inside the workflow (they change rarely). They need a JWT, so a shared CDN cache in front of them doesn't fit
    - move the API to its own instance or queue-mode workers
-4. **Non-atomic upserts.** A Data Table upsert is "update, else insert" with no unique index, so two overlapping writes for the same person can both insert. The frontend locks the control during a write, and `GET /polls` keeps only the newest row per person. Any new write endpoint needs the same care. The same applies to capacity: two people taking the last spot at the same moment can both get `going`. If that matters, run `POST /rsvp` with the workflow's concurrency limited to 1, or recheck the count after inserting and move the newer row to the waitlist.
-5. **Execution history.** The workflows save every successful execution. At this volume, save only failed executions to keep storage and the executions list manageable.
-6. **Sessions.** JWTs last 30 days and can't be revoked one by one. Rotating the `jwtAuth` secret signs everyone out. Shorten `exp` in the JWT node if that's too long.
-7. **CORS.** The webhooks use n8n's default CORS settings. Setting _Allowed Origins_ to the site origin limits browser access to the site.
+3. **Non-atomic upserts.** A Data Table upsert is "update, else insert" with no unique index, so two overlapping writes for the same person can both insert. The frontend locks the control during a write, and `GET /polls` keeps only the newest row per person. Any new write endpoint needs the same care. The same applies to capacity: two people taking the last spot at the same moment can both get `going`. If that matters, run `POST /rsvp` with the workflow's concurrency limited to 1, or recheck the count after inserting and move the newer row to the waitlist.
+4. **Execution history.** The workflows save every successful execution. At this volume, save only failed executions to keep storage and the executions list manageable.
+5. **Sessions.** JWTs last 30 days and can't be revoked one by one. Rotating the `jwtAuth` secret signs everyone out. Shorten `exp` in the "Generate JWT" node if that's too long.
+6. **CORS.** The webhooks use n8n's default CORS settings. Setting _Allowed Origins_ to the site origin limits browser access to the site.

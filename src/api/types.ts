@@ -31,9 +31,18 @@ export interface Workation {
   startDate: string;
   endDate: string;
   description: string;
-  /** Absolute URL, or a root-relative path for anything in public/. */
+  /** Absolute URL, or a root-relative path for anything in public/. For a
+      trip that started as a pitch, the pitch's photo link, copied over. */
   imageUrl: string;
   imageAlt: string;
+  /** The following three are copied from the pitch the trip started as, by
+      the "Pitch decisions" workflow, or entered by hand. */
+  /** http(s) link to the place people stay, or "" when none. */
+  accommodationUrl: string;
+  /** Estimated cost per person in euros, or null when not given. */
+  costEstimate: number | null;
+  /** What the estimate covers, or "" when not given. */
+  costIncludes: string;
   /** How many people have a confirmed spot. Counts only, never who. */
   attendees: number;
   /** Spots on the trip, or null when there is no limit. */
@@ -123,6 +132,11 @@ export interface Pitch {
   description: string;
   /** http(s) link to the place people would stay, or "" when none. */
   accommodationUrl: string;
+  /** https link to a photo hosted elsewhere, usually on the accommodation's
+      site, or "" when none. Nothing is uploaded: only the link is stored. */
+  imageUrl: string;
+  /** Describes the photo for screen readers. Set whenever imageUrl is. */
+  imageAlt: string;
   /** Spots on the trip, or null for no limit (and so no waitlist), like a
       trip's capacity. */
   capacity: number | null;
@@ -159,6 +173,9 @@ export interface NewPitch {
   endDate: string;
   description: string;
   accommodationUrl: string | null;
+  /** null for no photo. On POST /pitch-update, null removes it. */
+  imageUrl: string | null;
+  imageAlt: string | null;
   /** null for no limit. */
   capacity: number | null;
   threshold: number;

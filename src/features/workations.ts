@@ -15,6 +15,7 @@ import { ApiError } from "../api/types";
 import type { SignupStatus, WaitlistEntry, Workation } from "../api/types";
 import { isSignedIn } from "../auth";
 import { requireEl, template } from "../dom";
+import { euros, safeUrl } from "../format";
 import { appPath, assetPath, currentAppPath } from "../paths";
 import {
   monthName,
@@ -65,6 +66,18 @@ function describe(error: unknown, fallback: string): string {
   return fallback;
 }
 
+/* Trip photos are often links to another site, carried over from the pitch
+   the trip started as. No Referer, because many sites refuse images
+   embedded elsewhere when they see one. If the link is broken anyway (the
+   listing was taken down, the URL expired), the image goes and the grey
+   photo area stays. Called before src is set, so no error is missed. */
+function showPhoto(photo: HTMLImageElement): void {
+  photo.referrerPolicy = "no-referrer";
+  photo.addEventListener("error", () => {
+    photo.remove();
+  });
+}
+
 export function workationPath(trip: Workation): string {
   return appPath(`/n8ncation/${encodeURIComponent(trip.slug)}`);
 }
@@ -109,6 +122,7 @@ function buildCard(
   const photo = card.querySelector("img");
   if (photo instanceof HTMLImageElement) {
     if (trip.imageUrl) {
+      showPhoto(photo);
       photo.src = assetPath(trip.imageUrl);
       photo.alt = trip.imageAlt;
       /* The first upcoming card is the largest image above the fold. Past
@@ -539,6 +553,33 @@ async function toggleRsvp(v: DetailView): Promise<void> {
   }
 }
 
+/* Cost and accommodation, carried over from the pitch. Each fact is hidden
+   when it is empty, and the list with them when both are, so a hand-made
+   trip without either looks as it always did. */
+function fillFacts(root: HTMLElement, trip: Workation): void {
+  const facts = requireEl(root, "[data-detail-facts]");
+
+  const cost = requireEl(facts, "[data-detail-fact=cost]");
+  const hasCost = trip.costEstimate !== null;
+  if (trip.costEstimate !== null) {
+    requireEl(cost, "[data-detail-cost]").textContent =
+      `${euros.format(trip.costEstimate)} per person`;
+    const includes = requireEl(cost, "[data-detail-includes]");
+    includes.textContent = trip.costIncludes;
+    includes.hidden = trip.costIncludes === "";
+  }
+  cost.hidden = !hasCost;
+
+  const stay = requireEl(facts, "[data-detail-fact=stay]");
+  const href = trip.accommodationUrl ? safeUrl(trip.accommodationUrl) : null;
+  if (href) {
+    requireEl(stay, "a").setAttribute("href", href);
+  }
+  stay.hidden = href === null;
+
+  facts.hidden = !hasCost && href === null;
+}
+
 function fillDetail(root: HTMLElement, trip: Workation, past: boolean): void {
   document.title = `${trip.title} — n8ncation`;
 
@@ -564,9 +605,12 @@ function fillDetail(root: HTMLElement, trip: Workation, past: boolean): void {
   organizer.textContent = organizerName ? `Organized by ${organizerName}` : "";
   organizer.hidden = organizerName === "";
 
+  fillFacts(root, trip);
+
   const photo = root.querySelector("[data-detail-photo]");
   if (photo instanceof HTMLImageElement) {
     if (trip.imageUrl) {
+      showPhoto(photo);
       photo.src = assetPath(trip.imageUrl);
       photo.alt = trip.imageAlt;
     } else {
