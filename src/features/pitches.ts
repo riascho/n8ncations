@@ -338,8 +338,9 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
 /** Open pitches first, then cancelled ones. Within each, deadline first:
     the pitch that closes soonest needs attention first. */
 function byDeadline(a: Pitch, b: Pitch): number {
-  if (a.status !== b.status) {
-    return a.status === "open" ? -1 : 1;
+  const rank = (pitch: Pitch): number => (pitch.status === "open" ? 0 : 1);
+  if (rank(a) !== rank(b)) {
+    return rank(a) - rank(b);
   }
   const left = parseDate(a.deadline);
   const right = parseDate(b.deadline);
@@ -349,11 +350,22 @@ function byDeadline(a: Pitch, b: Pitch): number {
   return ordinal(left) - ordinal(right);
 }
 
+/* Home lists what everyone gets from GET /pitches: open pitches, and
+   cancelled ones until their deadline. The caller's own closed pitches,
+   which the route also sends, are only for /me. */
+function isListed(pitch: Pitch): boolean {
+  return (
+    pitch.status === "open" ||
+    (pitch.status === "cancelled" && pitch.deadline >= todayIso())
+  );
+}
+
 export async function mountPitches(slot: HTMLElement): Promise<void> {
   const state = slot.querySelector("[data-pitches-state]");
   let pitches: Pitch[];
   try {
     ({ pitches } = await api.getPitches());
+    pitches = pitches.filter(isListed);
   } catch (error) {
     if (state) {
       state.textContent = describe(error, "The pitches could not be loaded.");
@@ -377,11 +389,22 @@ export async function mountPitches(slot: HTMLElement): Promise<void> {
 /* ----------------------------------------------------------------
    Your pitches, /me
 
-   The same compact rows as "your trips" on that page. Built from GET
-   /pitches, so it lists what that route returns: your open pitches, and
-   cancelled ones until their deadline. A confirmed pitch shows up under
-   your trips instead, since you're signed up for it.
+   The same compact rows as "your trips" on that page, from the caller's
+   own pitches in GET /pitches, whatever their status. Open ones come first
+   and link to their edit form. Closed ones (cancelled, expired, went ahead)
+   are kept for reference, folded away in a quieter list below.
    ---------------------------------------------------------------- */
+
+/* What a closed pitch's row says after its dates. */
+function closedText(pitch: Pitch): string {
+  if (pitch.status === "cancelled") {
+    return `Cancelled: ${pitch.cancelReason}`;
+  }
+  if (pitch.status === "confirmed") {
+    return "Went ahead as an n8ncation";
+  }
+  return `Expired with ${progressText(pitch)}`;
+}
 
 function buildMyPitchRow(pitch: Pitch): HTMLElement {
   const row = template("my-pitch-template");
@@ -393,38 +416,66 @@ function buildMyPitchRow(pitch: Pitch): HTMLElement {
   const meta = requireEl(row, ".my-trip-meta");
   const action = requireEl(row, ".my-pitch-action");
 
-  if (pitch.status === "cancelled") {
-    /* No href: nothing left to edit, so the row is not a link. */
-    link.classList.add("is-static");
-    meta.append(dates, ` · Cancelled: ${pitch.cancelReason}`);
-    action.remove();
-  } else {
+  if (pitch.status === "open") {
     link.setAttribute("href", editPath(pitch.pitchId));
     meta.append(
       dates,
       ` · ${progressText(pitch)} · Closes ${formatDay(pitch.deadline)}`,
     );
     action.textContent = "Edit";
+  } else {
+    /* No href: nothing left to edit, so the row is not a link. */
+    link.classList.add("is-static");
+    meta.append(dates, ` · ${closedText(pitch)}`);
+    action.remove();
   }
   return row;
 }
 
-export function renderMyPitches(slot: HTMLElement, pitches: Pitch[]): void {
-  const mine = pitches.filter((pitch) => pitch.organizedByMe).sort(byDeadline);
-  slot.replaceChildren();
-  if (mine.length === 0) {
-    const none = document.createElement("p");
-    none.className = "trip-state";
-    none.textContent = "You haven’t pitched an n8ncation yet.";
-    slot.appendChild(none);
-    return;
-  }
+function pitchList(pitches: Pitch[]): HTMLElement {
   const list = document.createElement("ul");
   list.className = "my-trips";
-  for (const pitch of mine) {
+  for (const pitch of pitches) {
     list.appendChild(buildMyPitchRow(pitch));
   }
-  slot.appendChild(list);
+  return list;
+}
+
+/** Newest first: the pitch that closed most recently is the one you're
+    most likely looking for. */
+function byDeadlineDescending(a: Pitch, b: Pitch): number {
+  return byDeadline(b, a);
+}
+
+export function renderMyPitches(slot: HTMLElement, pitches: Pitch[]): void {
+  const mine = pitches.filter((pitch) => pitch.organizedByMe);
+  const open = mine.filter((pitch) => pitch.status === "open").sort(byDeadline);
+  const closed = mine
+    .filter((pitch) => pitch.status !== "open")
+    .sort(byDeadlineDescending);
+
+  slot.replaceChildren();
+  if (open.length === 0) {
+    const none = document.createElement("p");
+    none.className = "trip-state";
+    none.textContent =
+      closed.length === 0
+        ? "You haven’t pitched an n8ncation yet."
+        : "You have no open pitches right now.";
+    slot.appendChild(none);
+  } else {
+    slot.appendChild(pitchList(open));
+  }
+
+  /* Folded away by default: kept for reference, not for action. */
+  if (closed.length > 0) {
+    const details = document.createElement("details");
+    details.className = "my-pitches-closed";
+    const summary = document.createElement("summary");
+    summary.textContent = `Closed pitches (${closed.length})`;
+    details.append(summary, pitchList(closed));
+    slot.appendChild(details);
+  }
 }
 
 /* ----------------------------------------------------------------

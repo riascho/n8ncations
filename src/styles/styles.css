@@ -1312,6 +1312,35 @@ footer > span {
   display: none;
 }
 
+/* Closed pitches: folded away under the open ones, and quieter. */
+.my-pitches-closed {
+  margin-top: var(--space-24);
+}
+
+/* body-md/medium */
+.my-pitches-closed summary {
+  padding: var(--space-8) 0;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+  color: var(--type-secondary);
+  cursor: pointer;
+}
+
+.my-pitches-closed summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.my-pitches-closed .my-trips {
+  margin-top: var(--space-8);
+}
+
+.my-pitches-closed .my-trip-title {
+  font-weight: var(--weight-regular);
+  color: var(--type-secondary);
+}
+
 /* ----------------------------------------------------------------
    Poll hint and in-flight state
    ---------------------------------------------------------------- */

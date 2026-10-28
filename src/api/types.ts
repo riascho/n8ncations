@@ -101,13 +101,16 @@ export interface RsvpResult {
    Pitches
    ---------------------------------------------------------------- */
 
-/** "cancelled" means the organizer withdrew it, with a reason. */
-export type PitchStatus = "open" | "cancelled";
+/** "cancelled" means the organizer withdrew it, with a reason. "confirmed"
+    means it had enough interest and is a trip in GET /workations now;
+    "expired" means its deadline passed without enough. */
+export type PitchStatus = "open" | "cancelled" | "confirmed" | "expired";
 
-/** An open pitch, or a cancelled one whose deadline hasn't passed, so the
-    people interested in it can read why. GET /pitches leaves out confirmed
-    and expired ones: a confirmed pitch is a trip in GET /workations from
-    then on. */
+/** A pitch in GET /pitches. Everyone gets the open pitches, and the
+    cancelled ones whose deadline hasn't passed, so the people interested in
+    one can read why. On top of that, the caller gets every pitch they
+    organize, in any status, for "your pitches" on /me. Home shows only the
+    first group (see `isListed` in src/features/pitches.ts). */
 export interface Pitch {
   pitchId: string;
   status: PitchStatus;

@@ -232,11 +232,11 @@ function logisticsKey(workationId: string, sub: string): string {
   return `${workationId}:${sub}`;
 }
 
-/* Stands in for the `pitches` and `pitch_interest` tables. Only open pitches
-   are seeded: the real GET /pitches leaves confirmed and expired ones out.
-   The first is a few people short of its threshold, so registering interest
-   moves the bar visibly. The demo user pitched the third, so its card shows
-   the edit and cancel controls. */
+/* Stands in for the `pitches` and `pitch_interest` tables. The first is a
+   few people short of its threshold, so registering interest moves the bar
+   visibly. The demo user pitched the third, so its card shows the edit and
+   cancel controls. The demo user's two closed pitches (one expired, one
+   that became the Roche trip) only show under "your pitches" on /me. */
 type PitchRow = Omit<
   Pitch,
   "interested" | "interestedByMe" | "organizedByMe" | "organizer"
@@ -296,12 +296,48 @@ const pitchRows: PitchRow[] = [
     costIncludes: "Accommodation and breakfast",
     organizerSub: "demo-user",
   },
+  {
+    pitchId: "p-04",
+    status: "expired",
+    cancelReason: "",
+    place: "Tallinn, Estonia",
+    startDate: "2026-10-12",
+    endDate: "2026-10-16",
+    description:
+      "A week in the old town in early autumn, with a coworking space by the harbour.",
+    accommodationUrl: "",
+    capacity: 8,
+    threshold: 6,
+    deadline: "2026-09-15",
+    costEstimate: 480,
+    costIncludes: "",
+    organizerSub: "demo-user",
+  },
+  {
+    pitchId: "p-00",
+    status: "confirmed",
+    cancelReason: "",
+    place: "Roche, Spain",
+    startDate: "2026-11-06",
+    endDate: "2026-11-13",
+    description:
+      "A week together in a villa on the Andalusian coast, with space to work and the beach nearby.",
+    accommodationUrl: "",
+    capacity: 6,
+    threshold: 4,
+    deadline: "2026-08-31",
+    costEstimate: null,
+    costIncludes: "",
+    organizerSub: "demo-user",
+  },
 ];
 
 const interestRows: Record<string, string[]> = {
   "p-01": ["seed-2", "seed-1", "seed-4", "seed-5", "seed-6"],
   "p-02": ["seed-3", "seed-1"],
   "p-03": ["demo-user", "seed-5"],
+  "p-04": ["demo-user", "seed-1", "seed-6"],
+  "p-00": ["demo-user", "seed-1", "seed-2", "seed-3", "seed-4"],
 };
 
 function interestFor(pitchId: string): string[] {
@@ -495,11 +531,13 @@ export function addPollOption(pollId: string, value: string): Promise<void> {
 export function getPitches(): Promise<PitchesResponse> {
   const user = requireUser();
   const today = todayIso();
-  /* Like the workflow: a cancelled pitch stays listed until its deadline. */
+  /* Like the workflow: everyone gets open pitches and cancelled ones until
+     their deadline, and the caller also gets every pitch they organize. */
   const listed = pitchRows.filter(
     (row) =>
       row.status === "open" ||
-      (row.status === "cancelled" && row.deadline >= today),
+      (row.status === "cancelled" && row.deadline >= today) ||
+      row.organizerSub === user.sub,
   );
   return delay({
     pitches: listed.map(({ organizerSub, ...row }) => {
