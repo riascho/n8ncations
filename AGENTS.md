@@ -45,7 +45,7 @@ I build and edit the n8n workflows myself. If a change needs the backend to chan
 The n8n MCP is connected. Use it to check the live state before you reason about the backend, instead of relying on the blueprints alone.
 
 1. Read the live workflow with `get_workflow_details` before patching. Don't assume it matches its blueprint.
-2. Always set `versionName` on `update_workflow` and `create_workflow_from_code`, written like a commit message, plus a `versionDescription` saying why. `publish_workflow` has no name field; it publishes the version that the update created.
+2. Always set `versionName` on `update_workflow` and `create_workflow_from_code`, written like a commit message (not more than 5 words though), plus a `versionDescription` giving details. `publish_workflow` has no name field; it publishes the version that the update created.
 3. After changing, read the workflow back and check `activeVersion.sameAsDraft` before saying it's done.
 4. Approval to change the live instance covers one set of changes. Ask again for the next.
 5. Update the blueprint in `.n8n/workflows/` and `.n8n/README.md` in the same change, and generate live changes from the blueprint so the two match.
