@@ -91,16 +91,19 @@ li {
   top: var(--space-12);
 }
 
-/* One document holds both views; the inline script in index.html sets
+/* One document holds every view; the inline script in index.html sets
    data-view on <html> before first paint. display: none rather than
    [hidden], so the hidden view also leaves the accessibility tree and the
-   page never announces two h1s. The detail and me rules are written with
-   :not so that with JavaScript off — data-view never set — the home page is
-   what shows. */
-[data-view="detail"] [data-only="home"],
-[data-view="me"] [data-only="home"],
+   page never announces two h1s. The home rule only applies once data-view is
+   set, and the others are written with :not, so that with JavaScript off —
+   data-view never set — the home page is what shows. */
+:root[data-view]:not([data-view="home"]) [data-only="home"],
+:root:not([data-view="workations"]) [data-only="workations"],
+:root:not([data-view="vote"]) [data-only="vote"],
+:root:not([data-view="pitches"]) [data-only="pitches"],
 :root:not([data-view="detail"]) [data-only="detail"],
-:root:not([data-view="me"]) [data-only="me"] {
+:root:not([data-view="me"]) [data-only="me"],
+:root:not([data-view="pitch"]) [data-only="pitch"] {
   display: none;
 }
 
@@ -223,9 +226,15 @@ li {
   padding: var(--space-8) 0;
 }
 
-.header nav a:hover {
+.header nav a:hover,
+.header nav a[aria-current] {
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+/* The page you are on, or the section a trip or the pitch form belongs to. */
+.header nav a[aria-current] {
+  text-decoration-thickness: 2px;
 }
 
 /* ----------------------------------------------------------------
@@ -292,13 +301,23 @@ li {
   line-height: 36px;
 }
 
+/* The top of /workations, /vote and /pitches. */
+.page-head {
+  display: grid;
+  gap: var(--space-16);
+  padding: var(--space-32) 0 var(--space-48);
+}
+
 /* ----------------------------------------------------------------
    Trip card
    ---------------------------------------------------------------- */
 
+/* A carousel slide: photo on top, details below. Full height, so every
+   slide in a row ends on the same line. */
 .trip {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   border: 1px solid var(--stroke-secondary);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -307,7 +326,8 @@ li {
 
 .trip-photo {
   position: relative;
-  min-height: 392px;
+  flex-shrink: 0;
+  aspect-ratio: 3 / 2;
   overflow: hidden;
   background: var(--background-tertiary);
 }
@@ -330,6 +350,7 @@ li {
 
 .trip-details {
   display: flex;
+  flex: 1;
   flex-direction: column;
   padding: var(--space-32);
 }
@@ -403,6 +424,144 @@ li {
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--type-secondary);
+}
+
+/* Past trips: a smaller slide for a quick overview. The status capsule
+   would only repeat the section heading, and the description is one click
+   away on the trip page. */
+.trip-compact .status,
+.trip-compact .trip-description {
+  display: none;
+}
+
+.trip-compact .photo-label {
+  bottom: var(--space-16);
+  left: var(--space-16);
+}
+
+.trip-compact .trip-details {
+  padding: var(--space-24);
+}
+
+/* body-lg/medium */
+.trip-compact .edition {
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.trip-compact .edition a {
+  text-underline-offset: 4px;
+}
+
+.trip-compact .destination {
+  margin-top: var(--space-16);
+}
+
+/* heading-x-sm */
+.trip-compact .destination .place {
+  font-size: 24px;
+  line-height: 24px;
+  letter-spacing: 0;
+}
+
+/* body-md */
+.trip-compact .dates {
+  margin-top: var(--space-8);
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.trip-compact .trip-attendees {
+  padding-top: var(--space-16);
+}
+
+/* ----------------------------------------------------------------
+   Carousel, /workations
+
+   One row of slides that scrolls sideways and snaps each slide to the
+   left edge. The scrollbar is hidden: touch and trackpads scroll the row
+   directly, and the buttons in the section heading page through it.
+   ---------------------------------------------------------------- */
+
+.carousel-track {
+  display: grid;
+  grid-auto-flow: column;
+  gap: var(--space-24);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+.carousel-slide {
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+/* Upcoming: two generous slides in view. */
+.carousel-upcoming {
+  grid-auto-columns: calc((100% - var(--space-24)) / 2);
+}
+
+/* Past: four compact slides in view. */
+.carousel-past {
+  grid-auto-columns: calc((100% - 3 * var(--space-24)) / 4);
+}
+
+.carousel-controls {
+  display: flex;
+  gap: var(--space-8);
+  align-self: center;
+  margin-left: auto;
+}
+
+.carousel-controls[hidden] {
+  display: none;
+}
+
+/* body-xl, for the arrow. */
+.carousel-button {
+  display: grid;
+  place-items: center;
+  width: var(--space-48);
+  height: var(--space-48);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-full);
+  background: var(--interactive-primary-default);
+  color: var(--type-primary);
+  font: inherit;
+  font-size: 18px;
+  line-height: 22px;
+  cursor: pointer;
+}
+
+.carousel-button:not([aria-disabled="true"]):hover {
+  border-color: var(--stroke-primary);
+  background: var(--interactive-primary-hover);
+}
+
+.carousel-button:not([aria-disabled="true"]):active {
+  background: var(--interactive-primary-pressed);
+}
+
+.carousel-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* At an end of the row: still focusable, but visibly unavailable. */
+.carousel-button[aria-disabled="true"] {
+  background: transparent;
+  color: var(--type-secondary);
+  cursor: default;
 }
 
 /* Placeholder, empty and error lines for anything loaded from the API.
@@ -574,8 +733,9 @@ li {
    Polls
    ---------------------------------------------------------------- */
 
+/* The whole of /vote, so it takes the page spacing of /pitch. */
 .polls {
-  padding-top: var(--space-64);
+  padding: var(--space-32) 0 var(--space-64);
 }
 
 /* body-lg */
@@ -600,6 +760,20 @@ li {
   align-items: start;
   gap: var(--space-24);
   margin-top: var(--space-24);
+}
+
+/* Stays hidden until GET /polls succeeds, so the cards never show before
+   n8n has checked the session. */
+.poll-grid[hidden] {
+  display: none;
+}
+
+.polls-state {
+  margin-top: var(--space-24);
+}
+
+.polls-state[hidden] {
+  display: none;
 }
 
 /* Deboss Primary M (§2.2): the card is filled with the same colour as the
@@ -737,9 +911,12 @@ li {
 }
 
 /* The profile page's fields share this treatment — same affordance, same
-   site, so they should not look like two different kinds of text box. */
+   site, so they should not look like two different kinds of text box. The
+   logistics and pitch forms use it too, through .field. */
 .poll-suggest input,
-.profile-field input {
+.profile-field input,
+.field input,
+.field textarea {
   flex: 1;
   min-width: 0;
   padding: var(--space-12);
@@ -753,7 +930,9 @@ li {
 }
 
 .poll-suggest input:focus-visible,
-.profile-field input:focus-visible {
+.profile-field input:focus-visible,
+.field input:focus-visible,
+.field textarea:focus-visible {
   border-color: var(--stroke-primary);
   outline: 3px solid var(--focus-ring);
   outline-offset: 0;
@@ -762,7 +941,9 @@ li {
 /* Interactive Accent: pink fill with Core Black text (8.29:1). White on
    Main Accent Pink is 2.03:1 and must never be used. */
 .poll-suggest button,
-.profile-save {
+.profile-save,
+.button-accent {
+  display: inline-block;
   padding: var(--space-12) var(--space-24);
   border: 0;
   border-radius: var(--radius-sm);
@@ -776,17 +957,20 @@ li {
 }
 
 .poll-suggest button:hover,
-.profile-save:hover {
+.profile-save:hover,
+.button-accent:hover {
   background: var(--interactive-accent-hover);
 }
 
 .poll-suggest button:active,
-.profile-save:active {
+.profile-save:active,
+.button-accent:active {
   background: var(--interactive-accent-pressed);
 }
 
 .poll-suggest button:focus-visible,
-.profile-save:focus-visible {
+.profile-save:focus-visible,
+.button-accent:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -883,6 +1067,16 @@ li {
   margin-top: var(--space-16);
 }
 
+/* The "organized by employees, not sponsored" disclaimer. A side note
+   rather than a fourth point, so it sits under a divider. body-md */
+.about-copy .about-note {
+  margin-top: var(--space-32);
+  padding-top: var(--space-24);
+  border-top: 1px solid var(--stroke-secondary);
+  font-size: 14px;
+  line-height: 18px;
+}
+
 .expectations strong {
   color: var(--type-primary);
   font-weight: var(--weight-medium);
@@ -892,7 +1086,8 @@ li {
    Past n8ncations
    ---------------------------------------------------------------- */
 
-.past {
+.past,
+.my-pitches {
   padding-top: var(--space-32);
 }
 
@@ -1142,7 +1337,8 @@ footer > span {
    rather than capsules: a form label is not capsule content (§2.2 allows only
    short labels such as dates and categories), and every capsule on this page
    already uses the standalone crosshair style, which must not be mixed. */
-.profile-label {
+.profile-label,
+.field-label {
   display: block;
   margin-bottom: var(--space-8);
   color: var(--type-secondary);
@@ -1159,7 +1355,8 @@ footer > span {
 
 /* Disabled until /me has loaded, so a failed fetch cannot leave two empty
    fields that Save would write over a real team and job title. */
-.profile-field input:disabled {
+.profile-field input:disabled,
+.field input:disabled {
   background: var(--background-secondary);
   color: var(--type-secondary);
 }
@@ -1170,7 +1367,8 @@ footer > span {
   margin-top: var(--space-24);
 }
 
-.profile-save:disabled {
+.profile-save:disabled,
+.button-accent:disabled {
   background: var(--interactive-primary-default);
   color: var(--type-secondary);
   cursor: default;
@@ -1259,6 +1457,58 @@ footer > span {
   color: var(--type-secondary);
 }
 
+/* A cancelled pitch: an <a> without href, so it must not look clickable. */
+.my-trip.is-static:hover {
+  background: none;
+}
+
+/* body-md/medium. Words rather than an arrow: it says what the row does. */
+.my-pitch-action {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+}
+
+/* "Your pitches" heading with the pitch button at the far end. */
+.my-pitches-heading {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.my-pitches[hidden] {
+  display: none;
+}
+
+/* Closed pitches: folded away under the open ones, and quieter. */
+.my-pitches-closed {
+  margin-top: var(--space-24);
+}
+
+/* body-md/medium */
+.my-pitches-closed summary {
+  padding: var(--space-8) 0;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+  color: var(--type-secondary);
+  cursor: pointer;
+}
+
+.my-pitches-closed summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.my-pitches-closed .my-trips {
+  margin-top: var(--space-8);
+}
+
+.my-pitches-closed .my-trip-title {
+  font-weight: var(--weight-regular);
+  color: var(--type-secondary);
+}
+
 /* ----------------------------------------------------------------
    Poll hint and in-flight state
    ---------------------------------------------------------------- */
@@ -1280,6 +1530,514 @@ footer > span {
 
 .poll-option[disabled] {
   cursor: progress;
+}
+
+/* ----------------------------------------------------------------
+   Forms shared by logistics and pitches
+
+   Two columns on the 8px grid, with .field-wide spanning both. Labels and
+   inputs reuse the profile treatment above.
+   ---------------------------------------------------------------- */
+
+.logistics-form,
+.pitch-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-24);
+  margin-top: var(--space-24);
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+}
+
+.field textarea {
+  display: block;
+  resize: vertical;
+}
+
+/* body-md */
+.field-hint {
+  margin-top: var(--space-8);
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-secondary);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+.logistics.is-busy .logistics-form,
+.pitch-form.is-busy {
+  opacity: 0.6;
+}
+
+/* body-md. Collapses while empty but stays a live region, like the profile
+   status line. */
+.form-status {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-primary);
+}
+
+.form-status:empty {
+  height: 0;
+  overflow: hidden;
+}
+
+.form-status:not(:empty) {
+  margin-top: var(--space-16);
+}
+
+/* ----------------------------------------------------------------
+   Trip page: your details and the organizer's attendee list
+
+   Ruled off below the RSVP row with the same 40 + 32 rhythm and 1px rule
+   that row uses above itself.
+   ---------------------------------------------------------------- */
+
+.logistics,
+.roster {
+  margin-top: var(--space-40);
+  padding-top: var(--space-32);
+  border-top: 1px solid var(--stroke-secondary);
+}
+
+.logistics[hidden],
+.roster[hidden],
+.roster-scroll[hidden] {
+  display: none;
+}
+
+/* heading-x-sm */
+.detail-section-title {
+  font-size: 24px;
+  line-height: 24px;
+}
+
+/* body-lg */
+.detail-section-intro {
+  max-width: 640px;
+  margin-top: var(--space-8);
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--type-secondary);
+}
+
+/* body-md/mono, ALL CAPS per §1.2, like the attendee count. */
+.roster-summary {
+  margin-top: var(--space-24);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--type-secondary);
+}
+
+.roster-summary:empty {
+  display: none;
+}
+
+.roster .trip-state:not(:empty) {
+  margin-top: var(--space-16);
+}
+
+/* Eight columns do not fit a phone, so the table scrolls sideways rather
+   than squeezing every cell to one word per line. */
+.roster-scroll {
+  margin-top: var(--space-16);
+  overflow-x: auto;
+  border-top: 1px solid var(--stroke-secondary);
+}
+
+/* body-md */
+.roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 18px;
+  text-align: left;
+}
+
+.roster-table th,
+.roster-table td {
+  padding: var(--space-12) var(--space-16) var(--space-12) 0;
+  border-bottom: 1px solid var(--stroke-secondary);
+  vertical-align: top;
+}
+
+.roster-table td {
+  min-width: 120px;
+}
+
+/* body-md/mono column labels, ALL CAPS per §1.2. */
+.roster-table thead th {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-regular);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--type-secondary);
+}
+
+.roster-table tbody th {
+  min-width: 192px;
+  font-weight: var(--weight-regular);
+}
+
+/* body-md/medium */
+.roster-name {
+  display: block;
+  font-weight: var(--weight-medium);
+}
+
+.roster-email {
+  display: block;
+  margin-top: var(--space-4);
+  color: var(--type-secondary);
+  overflow-wrap: anywhere;
+}
+
+.roster-email:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* ----------------------------------------------------------------
+   Pitched n8ncations, home
+
+   Bordered cards, the trip card idiom without the photo: a pitch is a trip
+   that does not exist yet.
+   ---------------------------------------------------------------- */
+
+/* The whole of /pitches, so it takes the page spacing of /pitch. */
+.pitches {
+  padding: var(--space-32) 0 var(--space-64);
+}
+
+.pitches-lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-24);
+}
+
+.pitch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-24);
+  margin-top: var(--space-24);
+}
+
+/* A lone state line spans the grid instead of sitting in one column. */
+.pitch-grid > .trip-state {
+  grid-column: 1 / -1;
+}
+
+.pitch {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-32);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--background-primary);
+}
+
+/* The pitch's photo link, across the top like a trip card's photo: the
+   negative margins cancel the card's padding. */
+.pitch-photo {
+  aspect-ratio: 3 / 2;
+  margin: calc(var(--space-32) * -1) calc(var(--space-32) * -1) var(--space-24);
+  overflow: hidden;
+  background: var(--background-tertiary);
+}
+
+.pitch-photo img,
+.pitch-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The photo link's preview on /pitch, cropped like the card will be. */
+.pitch-preview {
+  max-width: 392px;
+  aspect-ratio: 3 / 2;
+  margin-top: var(--space-12);
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--background-tertiary);
+}
+
+.pitch-preview[hidden],
+.field-hint:empty {
+  display: none;
+}
+
+/* The trip page's cost and accommodation, laid out like a pitch card's. */
+.detail-facts {
+  max-width: 640px;
+}
+
+.detail-facts[hidden],
+.detail-facts > div[hidden] {
+  display: none;
+}
+
+.pitch-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+/* heading-x-sm */
+.pitch-place {
+  font-size: 24px;
+  line-height: 24px;
+}
+
+/* body-lg */
+.pitch-description {
+  margin-top: var(--space-16);
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--type-secondary);
+  white-space: pre-line;
+}
+
+.pitch-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-16) var(--space-24);
+  margin: var(--space-24) 0 0;
+}
+
+/* body-md/mono, ALL CAPS per §1.2. */
+.pitch-facts dt {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--type-secondary);
+}
+
+/* body-lg */
+.pitch-facts dd {
+  margin: var(--space-4) 0 0;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.pitch-facts a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* body-md */
+.pitch-includes {
+  display: block;
+  margin-top: var(--space-4);
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-secondary);
+}
+
+.pitch-includes[hidden] {
+  display: none;
+}
+
+/* Pinned to the bottom of the card, so buttons line up across a row of
+   cards whatever the descriptions run to. */
+.pitch-progress {
+  margin-top: auto;
+  padding-top: var(--space-24);
+}
+
+/* Pink as a graphic fill, never as text — §3, Light mode. */
+.pitch-track {
+  display: block;
+  height: var(--space-8);
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--background-tertiary);
+}
+
+.pitch-bar {
+  display: block;
+  width: var(--pct, 0%);
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--background-accent-pink);
+  transition: width 0.35s ease;
+}
+
+/* body-md/mono, ALL CAPS per §1.2. */
+.pitch-progress-text {
+  margin-top: var(--space-8);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--type-secondary);
+}
+
+/* The RSVP button's colours and states at the body-lg step: a card holds
+   several of these, the trip page only one. */
+.pitch-button {
+  align-self: flex-start;
+  margin-top: var(--space-24);
+  padding: var(--space-12) var(--space-24);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--interactive-accent-default);
+  color: var(--type-tertiary-buttons);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.pitch-button:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.pitch-button:active {
+  background: var(--interactive-accent-pressed);
+}
+
+.pitch-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.pitch-button[aria-pressed="true"] {
+  border-color: var(--stroke-primary);
+  background: var(--interactive-primary-default);
+}
+
+.pitch-button[aria-pressed="true"]:hover {
+  background: var(--interactive-primary-hover);
+}
+
+.pitch.is-busy .pitch-button {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* body-md */
+.pitch-status {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-primary);
+}
+
+.pitch-status:empty {
+  height: 0;
+  overflow: hidden;
+}
+
+.pitch-status:not(:empty) {
+  margin-top: var(--space-8);
+}
+
+/* A cancelled pitch: the reason takes the place of the progress and the
+   button, pinned to the bottom of the card the same way. The "Cancelled"
+   capsule in the top row carries the state. */
+.pitch-cancelled {
+  margin-top: auto;
+  padding-top: var(--space-24);
+}
+
+/* body-md/mono, ALL CAPS per §1.2. */
+.pitch-cancelled-label {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--type-secondary);
+}
+
+/* body-lg */
+.pitch-cancelled-reason {
+  margin-top: var(--space-8);
+  font-size: 16px;
+  line-height: 20px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+/* The organizer's controls, under the interest button. */
+.pitch-owner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-16);
+  margin-top: var(--space-16);
+}
+
+.pitch-cancel {
+  display: grid;
+  gap: var(--space-16);
+  margin-top: var(--space-24);
+}
+
+.pitch-owner[hidden],
+.pitch-cancel[hidden] {
+  display: none;
+}
+
+/* ----------------------------------------------------------------
+   Pitch form, /pitch
+
+   Bordered card like the profile, wider because the form has two columns.
+   ---------------------------------------------------------------- */
+
+.pitch-page {
+  padding: var(--space-32) 0 var(--space-64);
+}
+
+/* heading-x-lg */
+.pitch-page-title,
+.page-title {
+  font-size: 48px;
+  line-height: 48px;
+  letter-spacing: -0.01em;
+}
+
+.pitch-page .detail-section-intro {
+  margin-top: var(--space-16);
+}
+
+.pitch-form {
+  max-width: 720px;
+  margin-top: var(--space-32);
+  padding: var(--space-32);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--background-primary);
+}
+
+.pitch-page .form-status {
+  max-width: 720px;
 }
 
 /* ----------------------------------------------------------------
@@ -1308,8 +2066,9 @@ footer > span {
     width: calc(100% - var(--space-64));
   }
 
-  .trip-photo {
-    min-height: 408px;
+  /* Three compact slides in view. */
+  .carousel-past {
+    grid-auto-columns: calc((100% - 2 * var(--space-24)) / 3);
   }
 
   .trip-details {
@@ -1347,6 +2106,20 @@ footer > span {
     font-size: 48px;
     line-height: 48px;
   }
+
+  .pitch-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-16);
+  }
+
+  .pitch {
+    padding: var(--space-24);
+  }
+
+  .pitch-photo {
+    margin: calc(var(--space-24) * -1) calc(var(--space-24) * -1)
+      var(--space-24);
+  }
 }
 
 @media (max-width: 650px) {
@@ -1370,11 +2143,6 @@ footer > span {
     gap: var(--space-16);
     font-size: 14px;
     line-height: 18px;
-  }
-
-  /* Drop "Workations" from the nav; the section is the first thing below. */
-  .header nav a:first-child {
-    display: none;
   }
 
   .wrap {
@@ -1403,13 +2171,18 @@ footer > span {
     margin-bottom: var(--space-16);
   }
 
-  .trip {
-    grid-template-columns: 1fr;
+  /* One slide in view, with the edge of the next one showing so the row
+     reads as scrollable. */
+  .carousel-track {
+    gap: var(--space-16);
   }
 
-  .trip-photo {
-    min-height: 0;
-    height: 256px;
+  .carousel-upcoming {
+    grid-auto-columns: 85%;
+  }
+
+  .carousel-past {
+    grid-auto-columns: 70%;
   }
 
   .trip-details {
@@ -1422,10 +2195,6 @@ footer > span {
 
   .trip-description {
     margin-top: var(--space-24);
-  }
-
-  .polls {
-    padding-top: var(--space-48);
   }
 
   .poll-grid {
@@ -1519,6 +2288,33 @@ footer > span {
   .detail-rsvp-button {
     width: 100%;
   }
+
+  .logistics-form,
+  .pitch-form {
+    grid-template-columns: 1fr;
+    gap: var(--space-16);
+  }
+
+  .pitch-form {
+    padding: var(--space-24);
+  }
+
+  .pitch-facts {
+    grid-template-columns: 1fr;
+  }
+
+  /* heading-lg */
+  .pitch-page-title,
+  .page-title {
+    font-size: 40px;
+    line-height: 42px;
+  }
+
+  .logistics,
+  .roster {
+    margin-top: var(--space-32);
+    padding-top: var(--space-24);
+  }
 }
 
 @media (max-width: 380px) {
@@ -1537,11 +2333,13 @@ footer > span {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
+  html,
+  .carousel-track {
     scroll-behavior: auto;
   }
 
-  .poll-bar {
+  .poll-bar,
+  .pitch-bar {
     transition: none;
   }
 }

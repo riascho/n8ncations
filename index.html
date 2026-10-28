@@ -9,7 +9,7 @@
       content="n8ncation brings n8n colleagues together for a week of working across teams and spending time together. Explore our upcoming and past workations."
     />
     <!-- Replaced on the other views: with the edition once a trip card loads
-         (src/features/workations.ts), and on /me by src/main.ts. -->
+         (src/features/workations.ts), and on the rest by src/main.ts. -->
     <title>n8ncation — n8n workations</title>
     <!-- Official symbol from the n8n brand portal. The symbol alone is the
          right mark for a favicon; never draw or approximate a substitute. -->
@@ -18,7 +18,8 @@
       type="image/svg+xml"
       href="%BASE_URL%n8n-symbol-accent.svg"
     />
-    <!-- This one file serves /, /n8ncation/<slug> and /me: every unknown path
+    <!-- This one file serves every view (/, /workations, /vote, /pitches,
+         /n8ncation/<slug>, /pitch and /me): every unknown path
          falls back to index.html (Vite's default SPA fallback in dev and
          preview, and what any future host has to be configured to do), so
          there is no rewrite rule to keep in step between environments.
@@ -40,24 +41,42 @@
             path = path.slice(prefix.length);
           }
         }
-        document.documentElement.dataset.view =
-          path === "/me" || path === "/me/"
-            ? "me"
-            : path.startsWith("/n8ncation/")
-              ? "detail"
-              : "home";
+        /* Path (without a trailing slash) to view. */
+        var views = {
+          "/workations": "workations",
+          "/vote": "vote",
+          "/pitches": "pitches",
+          "/pitch": "pitch",
+          "/me": "me",
+        };
+        var key = path.length > 1 ? path.replace(/\/$/, "") : path;
+        document.documentElement.dataset.view = views.hasOwnProperty(key)
+          ? views[key]
+          : path.startsWith("/n8ncation/")
+            ? "detail"
+            : "home";
       })();
     </script>
   </head>
   <body>
-    <a class="skip" href="#workations" data-only="home" data-private
+    <a class="skip" href="#about" data-only="home">Skip to what to expect</a>
+    <a class="skip" href="#workations" data-only="workations" data-private
       >Skip to workations</a
+    >
+    <a class="skip" href="#polls" data-only="vote" data-private
+      >Skip to the polls</a
+    >
+    <a class="skip" href="#pitches" data-only="pitches" data-private
+      >Skip to pitches</a
     >
     <a class="skip" href="#workation" data-only="detail" data-private
       >Skip to the n8ncation</a
     >
     <a class="skip" href="#profile" data-only="me" data-private
       >Skip to your profile</a
+    >
+    <a class="skip" href="#pitch" data-only="pitch" data-private
+      >Skip to the pitch form</a
     >
     <header class="header">
       <a class="brand" href="%BASE_URL%" aria-label="n8ncation home"
@@ -69,10 +88,14 @@
           height="24"
         /><span class="brand-divider"></span><span>n8ncation</span></a
       >
+      <!-- data-nav names the view each link opens. src/main.ts marks the
+           current one with aria-current. -->
       <nav aria-label="Main navigation">
-        <a href="%BASE_URL%#workations" data-private>Workations</a
-        ><a href="%BASE_URL%#polls" data-private>Vote</a
-        ><a href="%BASE_URL%#about">What to expect</a>
+        <a href="%BASE_URL%" data-nav="home">About</a
+        ><a href="%BASE_URL%workations" data-nav="workations" data-private
+          >Workations</a
+        ><a href="%BASE_URL%vote" data-nav="vote" data-private>Vote</a
+        ><a href="%BASE_URL%pitches" data-nav="pitches" data-private>Pitches</a>
       </nav>
       <div class="auth" data-auth></div>
     </header>
@@ -122,6 +145,23 @@
             <p class="dates" data-detail-dates></p>
           </div>
           <p class="detail-description" data-detail-description></p>
+          <!-- Carried over from the pitch the trip started as. Filled by
+               fillFacts() in src/features/workations.ts. -->
+          <dl class="pitch-facts detail-facts" data-detail-facts hidden>
+            <div data-detail-fact="cost">
+              <dt>Estimated cost</dt>
+              <dd>
+                <span data-detail-cost></span>
+                <span class="pitch-includes" data-detail-includes></span>
+              </dd>
+            </div>
+            <div data-detail-fact="stay">
+              <dt>Accommodation</dt>
+              <dd>
+                <a target="_blank" rel="noopener noreferrer">See the place</a>
+              </dd>
+            </div>
+          </dl>
           <p class="detail-organizer" data-detail-organizer hidden></p>
           <div class="detail-rsvp" data-detail-rsvp>
             <p class="detail-attendees" data-detail-attendees role="status"></p>
@@ -137,6 +177,116 @@
               role="status"
             ></p>
           </div>
+          <!-- Shown once you have a spot or a waitlist place, until the trip
+               ends. Wired by src/features/logistics.ts. -->
+          <section
+            class="logistics"
+            data-logistics
+            aria-labelledby="logistics-title"
+            hidden
+          >
+            <h2 class="detail-section-title" id="logistics-title">
+              Your trip details
+            </h2>
+            <p class="detail-section-intro">
+              Only you and the trip’s organizer can see these. Leave out
+              anything you don’t want to share.
+            </p>
+            <form class="logistics-form">
+              <div class="field">
+                <label class="field-label" for="logistics-dietary"
+                  >Dietary needs</label
+                >
+                <input
+                  id="logistics-dietary"
+                  name="dietary"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="Vegetarian, no nuts"
+                />
+              </div>
+              <div class="field">
+                <label class="field-label" for="logistics-room"
+                  >Room preference</label
+                >
+                <input
+                  id="logistics-room"
+                  name="roomPreference"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="Happy to share"
+                />
+              </div>
+              <div class="field">
+                <label class="field-label" for="logistics-arrival"
+                  >Arrival</label
+                >
+                <input
+                  id="logistics-arrival"
+                  name="arrival"
+                  type="datetime-local"
+                />
+              </div>
+              <div class="field">
+                <label class="field-label" for="logistics-departure"
+                  >Departure</label
+                >
+                <input
+                  id="logistics-departure"
+                  name="departure"
+                  type="datetime-local"
+                />
+              </div>
+              <div class="field field-wide">
+                <label class="field-label" for="logistics-emergency"
+                  >Emergency contact</label
+                >
+                <input
+                  id="logistics-emergency"
+                  name="emergencyContact"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="Name and phone number"
+                />
+              </div>
+              <div class="form-actions field-wide">
+                <button class="button-accent" type="submit">Save</button>
+              </div>
+            </form>
+            <p class="form-status" data-logistics-status role="status"></p>
+          </section>
+          <!-- Organizer only: who is coming, with everyone's logistics. -->
+          <section
+            class="roster"
+            data-roster
+            aria-labelledby="roster-title"
+            hidden
+          >
+            <h2 class="detail-section-title" id="roster-title">Attendees</h2>
+            <p class="detail-section-intro">
+              You can see this list because you organize this trip. It holds
+              private details, so keep it within the organizing team.
+            </p>
+            <p class="roster-summary" data-roster-summary></p>
+            <p class="trip-state" data-roster-state role="status"></p>
+            <div class="roster-scroll" data-roster-table hidden>
+              <table class="roster-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Team</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Dietary needs</th>
+                    <th scope="col">Room</th>
+                    <th scope="col">Arrival</th>
+                    <th scope="col">Departure</th>
+                    <th scope="col">Emergency contact</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </article>
       <!-- /me. The card stays hidden until GET /me resolves, and is emptied
@@ -210,6 +360,23 @@
         </div>
         <div data-my-upcoming></div>
       </section>
+      <!-- Pitches you organize, filled by renderMyPitches() from GET
+           /pitches. Loaded on its own, so it shows even if the profile
+           fails, and stays hidden until that request has succeeded. -->
+      <section
+        class="my-pitches wrap"
+        data-only="me"
+        data-private
+        data-my-pitches
+        aria-labelledby="my-pitches-title"
+        hidden
+      >
+        <div class="section-heading my-pitches-heading">
+          <h2 id="my-pitches-title">Your pitches</h2>
+          <a class="button-accent" href="%BASE_URL%pitch">Pitch an n8ncation</a>
+        </div>
+        <div data-my-pitches-list></div>
+      </section>
       <section
         class="past wrap"
         data-only="me"
@@ -222,6 +389,212 @@
           <h2 id="my-past-title">Your past n8ncations</h2>
         </div>
         <div data-my-past></div>
+      </section>
+      <!-- /pitch. Wired by mountPitchForm() in src/features/pitches.ts, which
+           also sets the length and number limits on these fields. The body
+           stays hidden until n8n has accepted the session: this view loads
+           no data of its own, so nothing else would check the token.
+           /pitch?edit=<pitchId> is the same form for the pitch's organizer:
+           pitches.ts swaps the texts below and fills in the fields. -->
+      <section
+        class="pitch-page wrap"
+        id="pitch"
+        data-pitch-page
+        data-only="pitch"
+        data-private
+        aria-labelledby="pitch-title"
+      >
+        <p class="trip-state" data-pitch-state role="status">
+          Checking your session…
+        </p>
+        <div data-pitch-body hidden>
+          <h1 class="pitch-page-title" id="pitch-title" data-pitch-title>
+            Pitch an n8ncation
+          </h1>
+          <p class="detail-section-intro" data-pitch-intro>
+            Suggest a place and dates. Colleagues can register interest until
+            your deadline. If enough people are in, your pitch becomes an
+            n8ncation the next day, with you as the organizer.
+          </p>
+          <form class="pitch-form">
+            <div class="field field-wide">
+              <label class="field-label" for="pitch-place">Place</label>
+              <input
+                id="pitch-place"
+                name="place"
+                type="text"
+                autocomplete="off"
+                placeholder="Porto, Portugal"
+                required
+              />
+            </div>
+            <div class="field">
+              <label class="field-label" for="pitch-start">Start date</label>
+              <input id="pitch-start" name="startDate" type="date" required />
+            </div>
+            <div class="field">
+              <label class="field-label" for="pitch-end">End date</label>
+              <input id="pitch-end" name="endDate" type="date" required />
+            </div>
+            <div class="field field-wide">
+              <label class="field-label" for="pitch-description"
+                >What’s the plan</label
+              >
+              <textarea
+                id="pitch-description"
+                name="description"
+                rows="5"
+                placeholder="Where you’d stay, how to get there, what a day could look like."
+                required
+              ></textarea>
+            </div>
+            <div class="field">
+              <label class="field-label" for="pitch-capacity">Group size</label>
+              <input
+                id="pitch-capacity"
+                name="capacity"
+                type="number"
+                inputmode="numeric"
+                step="1"
+                placeholder="10"
+                aria-describedby="pitch-capacity-hint"
+              />
+              <p class="field-hint" id="pitch-capacity-hint">
+                How many people the place fits. Leave empty for no limit.
+              </p>
+            </div>
+            <div class="field">
+              <label class="field-label" for="pitch-threshold"
+                >Interest needed</label
+              >
+              <input
+                id="pitch-threshold"
+                name="threshold"
+                type="number"
+                inputmode="numeric"
+                step="1"
+                placeholder="8"
+                aria-describedby="pitch-threshold-hint"
+                required
+              />
+              <p class="field-hint" id="pitch-threshold-hint">
+                The trip goes ahead once this many people are interested,
+                including you.
+              </p>
+            </div>
+            <div class="field">
+              <label class="field-label" for="pitch-deadline"
+                >Interest deadline</label
+              >
+              <input
+                id="pitch-deadline"
+                name="deadline"
+                type="date"
+                aria-describedby="pitch-deadline-hint"
+                required
+              />
+              <p class="field-hint" id="pitch-deadline-hint">
+                The last day people can register interest.
+              </p>
+            </div>
+            <div class="field">
+              <label class="field-label" for="pitch-cost"
+                >Cost per person in euros</label
+              >
+              <input
+                id="pitch-cost"
+                name="costEstimate"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                step="1"
+                placeholder="650"
+                aria-describedby="pitch-cost-hint"
+              />
+              <p class="field-hint" id="pitch-cost-hint">
+                A rough estimate. Optional.
+              </p>
+            </div>
+            <div class="field field-wide">
+              <label class="field-label" for="pitch-includes"
+                >What the cost includes</label
+              >
+              <input
+                id="pitch-includes"
+                name="costIncludes"
+                type="text"
+                autocomplete="off"
+                placeholder="Accommodation, coworking space, two shared dinners"
+              />
+            </div>
+            <div class="field field-wide">
+              <label class="field-label" for="pitch-stay"
+                >Accommodation link</label
+              >
+              <input
+                id="pitch-stay"
+                name="accommodationUrl"
+                type="url"
+                autocomplete="off"
+                placeholder="https://"
+              />
+            </div>
+            <!-- The photo is a link to an image already online; nothing is
+                 uploaded. pitches.ts loads it into the preview as a check,
+                 because only a link that loads as an image can be saved. -->
+            <div class="field field-wide">
+              <label class="field-label" for="pitch-image">Photo link</label>
+              <input
+                id="pitch-image"
+                name="imageUrl"
+                type="url"
+                autocomplete="off"
+                placeholder="https://"
+                aria-describedby="pitch-image-hint pitch-image-status"
+              />
+              <p class="field-hint" id="pitch-image-hint">
+                Optional. On the accommodation’s website, right-click a photo of
+                the place and choose “Copy image address”.
+              </p>
+              <p
+                class="field-hint"
+                id="pitch-image-status"
+                data-pitch-photo-status
+                role="status"
+              ></p>
+              <div class="pitch-preview" data-pitch-preview hidden>
+                <img alt="" referrerpolicy="no-referrer" />
+              </div>
+            </div>
+            <div class="field field-wide">
+              <label class="field-label" for="pitch-image-alt"
+                >Photo description</label
+              >
+              <input
+                id="pitch-image-alt"
+                name="imageAlt"
+                type="text"
+                autocomplete="off"
+                placeholder="The terrace of the townhouse, looking over the river"
+                aria-describedby="pitch-image-alt-hint"
+              />
+              <p class="field-hint" id="pitch-image-alt-hint">
+                What the photo shows, for people using a screen reader. Needed
+                when you add a photo.
+              </p>
+            </div>
+            <div class="form-actions field-wide">
+              <a
+                class="auth-button auth-button-quiet"
+                href="%BASE_URL%pitches"
+                data-pitch-back
+                >Cancel</a
+              >
+              <button class="button-accent" type="submit">Submit pitch</button>
+            </div>
+          </form>
+          <p class="form-status" data-pitch-status role="status"></p>
+        </div>
       </section>
       <section class="intro" data-only="home" aria-labelledby="page-title">
         <p class="eyebrow">n8n + WORKATION</p>
@@ -239,20 +612,50 @@
       >
         <h2 id="signin-title">Sign in to see n8ncations</h2>
         <p>
-          Use your n8n account to see upcoming and past n8ncations, RSVP, and
-          vote on where we go next.
+          Use your n8n account to see upcoming and past n8ncations, RSVP, vote
+          on where we go next, and pitch a trip of your own.
         </p>
         <button class="auth-button" type="button" data-signin>Sign in</button>
       </section>
+      <!-- /workations: upcoming and past trips, filled from GET /workations
+           by mountWorkations(). -->
+      <div class="page-head wrap" data-only="workations" data-private>
+        <h1 class="page-title">n8ncations</h1>
+        <p class="polls-intro">
+          Where we’re going next and where we’ve been. Open an upcoming trip to
+          RSVP.
+        </p>
+      </div>
       <section
         class="workations wrap"
         id="workations"
-        data-only="home"
+        data-only="workations"
         data-private
         aria-labelledby="upcoming-title"
       >
+        <!-- The carousel controls are wired by mountCarousel() in
+             src/features/workations.ts, and stay hidden while every card
+             fits. -->
         <div class="section-heading">
           <h2 id="upcoming-title">Upcoming n8ncation</h2>
+          <div class="carousel-controls" data-carousel-controls hidden>
+            <button
+              class="carousel-button"
+              type="button"
+              data-carousel-prev
+              aria-label="Previous upcoming n8ncations"
+            >
+              <span aria-hidden="true">←</span>
+            </button>
+            <button
+              class="carousel-button"
+              type="button"
+              data-carousel-next
+              aria-label="Next upcoming n8ncations"
+            >
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
         </div>
         <noscript>
           <p class="trip-state">
@@ -296,17 +699,21 @@
               vibrant new setting that creates unforgettable memories.
             </li>
           </ul>
+          <p class="about-note">
+            n8ncations are organized by n8n employees, for n8n employees. They
+            aren’t sponsored by n8n directly, at least not yet.
+          </p>
         </div>
       </section>
       <section
         class="polls wrap"
         id="polls"
-        data-only="home"
+        data-only="vote"
         data-private
         aria-labelledby="polls-title"
       >
         <div class="section-heading">
-          <h2 id="polls-title">Help plan the next one</h2>
+          <h1 class="page-title" id="polls-title">Help plan the next one</h1>
         </div>
         <p class="polls-intro">
           Two quick questions. Results are shared with the whole team and update
@@ -317,10 +724,42 @@
             Voting needs JavaScript — the questions are below for reference.
           </p>
         </noscript>
-        <div class="poll-grid" data-polls></div>
+        <!-- Hidden until GET /polls succeeds: the questions come from the
+             bundle, so without the wait they would show before n8n has
+             checked the session. -->
+        <p class="trip-state polls-state" data-polls-state role="status">
+          Loading the polls…
+        </p>
+        <div class="poll-grid" data-polls hidden></div>
+      </section>
+      <section
+        class="pitches wrap"
+        id="pitches"
+        data-only="pitches"
+        data-private
+        aria-labelledby="pitches-title"
+      >
+        <div class="section-heading">
+          <h1 class="page-title" id="pitches-title">Pitched n8ncations</h1>
+        </div>
+        <div class="pitches-lead">
+          <p class="polls-intro">
+            Anyone can pitch a trip. If enough people are interested by the
+            deadline, it becomes an n8ncation, and everyone interested gets a
+            spot or a place on the waitlist.
+          </p>
+          <a class="button-accent" href="%BASE_URL%pitch">Pitch an n8ncation</a>
+        </div>
+        <div class="pitch-grid" data-pitches>
+          <p class="trip-state" data-pitches-state role="status">
+            Loading pitches…
+          </p>
+        </div>
       </section>
       <!-- One preview card per n8ncation, filled from GET /workations. The
-           heading links through to /n8ncation/<slug> for the full card. -->
+           heading links through to /n8ncation/<slug> for the full card.
+           Each card is a slide in a carousel on /workations; past trips add
+           .trip-compact, which drops the description and status. -->
       <template id="trip-template">
         <article class="trip">
           <div class="trip-photo">
@@ -340,6 +779,96 @@
             <p class="trip-description"></p>
             <p class="trip-attendees"></p>
           </div>
+        </article>
+      </template>
+      <!-- One card per pitch, filled from GET /pitches. The bar is
+           decoration: the text beside it says the same thing. A cancelled
+           pitch swaps the progress and button for the organizer's reason.
+           The organizer's own card gets the edit and cancel controls; the
+           cancel form's label ids are set per card in pitches.ts. -->
+      <template id="pitch-template">
+        <article class="pitch">
+          <div class="pitch-photo">
+            <img
+              alt=""
+              width="1440"
+              height="960"
+              loading="lazy"
+              referrerpolicy="no-referrer"
+            />
+          </div>
+          <div class="pitch-top">
+            <h3 class="pitch-place"></h3>
+            <span class="status pitch-deadline"></span>
+          </div>
+          <p class="dates pitch-dates"></p>
+          <p class="pitch-description"></p>
+          <dl class="pitch-facts">
+            <div>
+              <dt>Estimated cost</dt>
+              <dd>
+                <span class="pitch-cost"></span>
+                <span class="pitch-includes"></span>
+              </dd>
+            </div>
+            <div>
+              <dt>Group size</dt>
+              <dd class="pitch-capacity"></dd>
+            </div>
+            <div data-fact="stay">
+              <dt>Accommodation</dt>
+              <dd>
+                <a target="_blank" rel="noopener noreferrer">See the place</a>
+              </dd>
+            </div>
+            <div data-fact="organizer">
+              <dt>Pitched by</dt>
+              <dd></dd>
+            </div>
+          </dl>
+          <div class="pitch-progress">
+            <span class="pitch-track" aria-hidden="true"
+              ><span class="pitch-bar"></span
+            ></span>
+            <p class="pitch-progress-text" role="status"></p>
+          </div>
+          <div class="pitch-cancelled" hidden>
+            <p class="pitch-cancelled-label">Cancelled by the organizer</p>
+            <p class="pitch-cancelled-reason"></p>
+          </div>
+          <button
+            class="pitch-button"
+            type="button"
+            aria-pressed="false"
+          ></button>
+          <div class="pitch-owner" hidden>
+            <a class="auth-button auth-button-quiet pitch-edit">Edit pitch</a>
+            <button
+              class="auth-button auth-button-quiet pitch-cancel-open"
+              type="button"
+            >
+              Cancel pitch
+            </button>
+          </div>
+          <form class="pitch-cancel" hidden>
+            <div class="field">
+              <label class="field-label">Why are you cancelling?</label>
+              <textarea name="reason" rows="3" required></textarea>
+              <p class="field-hint">
+                Everyone sees this on the card until the interest deadline.
+              </p>
+            </div>
+            <div class="form-actions">
+              <button
+                class="auth-button auth-button-quiet pitch-cancel-keep"
+                type="button"
+              >
+                Keep pitch
+              </button>
+              <button class="button-accent" type="submit">Cancel pitch</button>
+            </div>
+          </form>
+          <p class="pitch-status" role="status"></p>
         </article>
       </template>
       <template id="poll-template">
@@ -373,6 +902,19 @@
           </a>
         </li>
       </template>
+      <!-- One row per pitch you organize on /me, filled by renderMyPitches().
+           Same row as a trip. An open pitch links to its edit form, and the
+           visible "Edit" is part of the link's name. A cancelled pitch has no
+           href, so it is a plain row carrying the reason. -->
+      <template id="my-pitch-template">
+        <li>
+          <a class="my-trip">
+            <span class="my-trip-title"></span>
+            <span class="my-trip-meta"></span>
+            <span class="my-trip-arrow my-pitch-action"></span>
+          </a>
+        </li>
+      </template>
       <template id="poll-option-template">
         <li>
           <button class="poll-option" type="button" aria-pressed="false">
@@ -383,19 +925,37 @@
       </template>
       <section
         class="past wrap"
-        data-only="home"
+        data-only="workations"
         data-private
         aria-labelledby="past-title"
       >
         <div class="section-heading">
           <h2 id="past-title">Past n8ncations</h2>
           <span class="count" data-past-count>00</span>
+          <div class="carousel-controls" data-carousel-controls hidden>
+            <button
+              class="carousel-button"
+              type="button"
+              data-carousel-prev
+              aria-label="Previous past n8ncations"
+            >
+              <span aria-hidden="true">←</span>
+            </button>
+            <button
+              class="carousel-button"
+              type="button"
+              data-carousel-next
+              aria-label="Next past n8ncations"
+            >
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
         </div>
         <div data-past></div>
       </section>
     </main>
     <footer class="wrap">
-      <a class="brand" href="%BASE_URL%#" aria-label="Back to top"
+      <a class="brand" href="#" aria-label="Back to top"
         ><img
           class="n8n-logo"
           src="%BASE_URL%n8n-logo-black-accent.svg"
