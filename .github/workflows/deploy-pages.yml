@@ -13,8 +13,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.ref_name == 'full_features'
-    # if: github.ref_name == github.event.repository.default_branch
+    if: github.ref_name == github.event.repository.default_branch
     permissions:
       contents: read
       pages: write
