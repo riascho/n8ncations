@@ -116,9 +116,9 @@ src/
   data/
     polls.ts            Poll definitions (question, single/multi, seed options, suggestions on/off)
   features/
-    workations.ts       Trip cards on home, the trip detail page + RSVP and waitlist, the "your trips" list on /me
+    workations.ts       Trip carousels on /workations, the trip detail page + RSVP and waitlist, the "your trips" list on /me
     logistics.ts        On the trip page: your private logistics form, and the organizer's attendee list
-    pitches.ts          Pitch cards + interest on home, the organizer's cancel, "your pitches" on /me, and the /pitch form (new or edit)
+    pitches.ts          Pitch cards + interest on /pitches, the organizer's cancel, "your pitches" on /me, and the /pitch form (new or edit)
     polls.ts            Poll cards, voting, free-text suggestions
     profile.ts          The /me profile card (team, job title)
   styles/
@@ -126,16 +126,19 @@ src/
     styles.css          Component styles, using the tokens only
 ```
 
-**Views.** There are four, all served by `index.html`:
+**Views.** There are seven, all served by `index.html`. The nav links to the first four, labelled About, Workations, Vote and Pitches:
 
-| Path                | View     | What it shows when signed in                                                                                                                                           |
-| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                 | `home`   | Upcoming and past trips, "What to expect", the polls, open pitches (and cancelled ones until their deadline)                                                           |
-| `/n8ncation/<slug>` | `detail` | One trip with the RSVP button, your logistics form once you've signed up, and the attendee list if you organize it                                                     |
-| `/me`               | `me`     | Your profile (editable team + job title), your trips including waitlisted ones, and your pitches: open ones link to their edit form, closed ones are folded away below |
-| `/pitch`            | `pitch`  | The form to pitch a trip. With `?edit=<pitchId>`, the same form filled in, for that pitch's organizer only                                                             |
+| Path                | View         | What it shows when signed in                                                                                                                                           |
+| ------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                 | `home`       | The landing page: the intro and "What to expect". The only view with public content, and it loads nothing                                                              |
+| `/workations`       | `workations` | Upcoming and past trips, each in a carousel (large slides for upcoming, compact ones for past)                                                                         |
+| `/vote`             | `vote`       | The polls                                                                                                                                                              |
+| `/pitches`          | `pitches`    | Open pitches (and cancelled ones until their deadline)                                                                                                                 |
+| `/n8ncation/<slug>` | `detail`     | One trip with the RSVP button, your logistics form once you've signed up, and the attendee list if you organize it                                                     |
+| `/me`               | `me`         | Your profile (editable team + job title), your trips including waitlisted ones, and your pitches: open ones link to their edit form, closed ones are folded away below |
+| `/pitch`            | `pitch`      | The form to pitch a trip. With `?edit=<pitchId>`, the same form filled in, for that pitch's organizer only                                                             |
 
-A small inline script in `<head>` sets `<html data-view="…">` before first paint. CSS hides every element whose `data-only` doesn't match the view, and `main.ts` reads `data-view` to decide what to mount. In the same way, `main.ts` sets `<html data-session="signed-in|signed-out">` at boot: elements marked `data-private` only show signed in, and elements marked `data-signed-out` (the banner) only show signed out. Before that runs, neither shows. Elements are found through `data-*` hooks, and repeated items (trip cards, poll cards, options, rows) are cloned from `<template>`s.
+A small inline script in `<head>` sets `<html data-view="…">` before first paint. CSS hides every element whose `data-only` doesn't match the view, and `main.ts` reads `data-view` to decide what to mount and which nav link (`data-nav`) gets `aria-current`. In the same way, `main.ts` sets `<html data-session="signed-in|signed-out">` at boot: elements marked `data-private` only show signed in, and elements marked `data-signed-out` (the banner) only show signed out. Before that runs, neither shows. Elements are found through `data-*` hooks, and repeated items (trip cards, poll cards, options, rows) are cloned from `<template>`s.
 
 **Conventions worth keeping:**
 
@@ -209,7 +212,7 @@ Each route is its own n8n workflow, named after its path (`/workations`, `/me`, 
 `Workation` = `{ workationId, slug, title, place, startDate, endDate, description, imageUrl, imageAlt, attendees, capacity: number | null, waitlisted, organizer: { name, … } | null }`.
 `Logistics` = `{ dietary, roomPreference, arrival, departure, emergencyContact }`, every field `string | null`. `arrival` and `departure` are `YYYY-MM-DDTHH:MM` in destination time.
 `RosterEntry` = `{ name, email, team, status: "going" | "waitlist", position: number | null, logistics: Logistics | null }`.
-`Pitch` = `{ pitchId, status: "open" | "cancelled" | "confirmed" | "expired", cancelReason, place, startDate, endDate, description, accommodationUrl, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes, interested, interestedByMe, organizedByMe, organizer: { name } | null }`. `cancelReason` is `""` unless cancelled. Home shows only open pitches and cancelled ones before their deadline; your other pitches are only for `/me`.
+`Pitch` = `{ pitchId, status: "open" | "cancelled" | "confirmed" | "expired", cancelReason, place, startDate, endDate, description, accommodationUrl, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes, interested, interestedByMe, organizedByMe, organizer: { name } | null }`. `cancelReason` is `""` unless cancelled. `/pitches` shows only open pitches and cancelled ones before their deadline; your other pitches are only for `/me`.
 `NewPitch` = `{ place, startDate, endDate, description, accommodationUrl: string | null, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes: string | null }`.
 The full contract is in `src/api/types.ts`.
 
@@ -222,7 +225,7 @@ The full contract is in `src/api/types.ts`.
 When `VITE_API_BASE` is empty, `client.ts` routes every call to `src/api/mock.ts`:
 
 - In-memory seed data: three trips, some votes and signups, one suggested location, three open pitches and some logistics. Roche (upcoming) has one spot left and is organized by the demo user, so it shows the attendee list. Lapland (upcoming) is full, so signing up joins the waitlist. Lisbon is past. The demo user pitched Lake Bled, so its card has the edit and cancel controls, and it is listed under "Your pitches" on `/me`, along with two closed demo pitches (Tallinn expired, Roche went ahead) folded away below.
-- Nothing confirms or expires pitches in mock mode, since that's the scheduled workflow's job. Pages are separate documents, so a pitch submitted or edited on `/pitch` is back to its seed state by the time home loads. Cancelling happens on home, so it stays visible until you reload.
+- Nothing confirms or expires pitches in mock mode, since that's the scheduled workflow's job. Pages are separate documents, so a pitch submitted or edited on `/pitch` is back to its seed state by the time `/pitches` loads. Cancelling happens on `/pitches`, so it stays visible until you reload.
 - **Sign in (demo)** creates a local, **unsigned** session for "Demo Colleague". n8n would reject this token; it exists only to drive the mock.
 - Every call waits about 260 ms to simulate the network. All state resets on reload, and a banner says so.
 
@@ -232,9 +235,9 @@ Use mock mode to build or review UI without touching real data. When the API con
 
 ## Managing content
 
-- **Add a trip:** add a row to the `workations` Data Table (columns above), or let a pitch become one. It appears on the home page right away and gets its own page at `/n8ncation/<slug>`. Once `end_date` has passed, it moves to "Past n8ncations" and the RSVP button disappears.
+- **Add a trip:** add a row to the `workations` Data Table (columns above), or let a pitch become one. It appears on `/workations` right away and gets its own page at `/n8ncation/<slug>`. Once `end_date` has passed, it moves to "Past n8ncations" and the RSVP button disappears.
 - **Change a trip's capacity:** edit `capacity`. Raising it doesn't move anyone off the waitlist by itself; set the oldest waitlist rows to `going` by hand.
-- **Withdraw a pitch:** its organizer can cancel it from its card on home, with a reason. To remove one by hand without a reason showing, set its `status` to `expired`.
+- **Withdraw a pitch:** its organizer can cancel it from its card on `/pitches`, with a reason. To remove one by hand without a reason showing, set its `status` to `expired`.
 - **Seed a poll option:** add a `poll_options` row with `created_by_sub = seed`. Also add it to `seedOptions` in `src/data/polls.ts` if it should show before results load.
 - **Remove a poll option:** delete its `poll_options` row. Existing votes for it are ignored in the counts.
 
@@ -273,7 +276,7 @@ All money amounts are in EUR for now. No currency is stored or sent: `cost_estim
 
 **Design.** Any new UI follows [`n8ndesign.md`](n8ndesign.md) and uses the tokens in `src/styles/tokens.css`. Don't add raw colors, sizes or a hand-drawn logo.
 
-**Load per page view:** signed out, no view makes any calls. Signed in, home makes 4 calls (`/workations`, `/polls`, `/me`, `/pitches`). The detail page makes 2, plus `/logistics` once you're signed up and `/roster` if you organize the trip. `/me` makes 3 (`/me`, `/workations`, `/pitches`), and `/pitch` makes 1 (`/me`, to verify the session, or `/pitches` when editing). Each vote or RSVP adds one write. A launch announcement to all 500 people could mean around 1,500 executions within minutes.
+**Load per page view:** signed out, no view makes any calls. Signed in, home makes none, `/workations` makes 1 (`/workations`), `/vote` makes 2 (`/polls`, then `/me` for your own votes) and `/pitches` makes 1 (`/pitches`). The detail page makes 2, plus `/logistics` once you're signed up and `/roster` if you organize the trip. `/me` makes 3 (`/me`, `/workations`, `/pitches`), and `/pitch` makes 1 (`/me`, to verify the session, or `/pitches` when editing). Each vote or RSVP adds one write. A launch announcement to all 500 people could mean around 1,500 executions within minutes.
 
 Things to watch as usage grows, roughly in order:
 
@@ -281,7 +284,6 @@ Things to watch as usage grows, roughly in order:
 2. **`GET /workations` reads all of `profiles`** on every call just to resolve organizer names. Filter to the organizer subs, or store the organizer's display name on the trip.
 3. **Concurrency.** Webhook executions queue under the instance's concurrency limit, so a burst slows every endpoint, including sign-in. Options:
    - cache the results of `GET /workations` and `GET /polls` inside the workflow (they change rarely). They need a JWT, so a shared CDN cache in front of them doesn't fit
-   - combine `GET /workations` and `GET /polls` into one call for the home page
    - move the API to its own instance or queue-mode workers
 4. **Non-atomic upserts.** A Data Table upsert is "update, else insert" with no unique index, so two overlapping writes for the same person can both insert. The frontend locks the control during a write, and `GET /polls` keeps only the newest row per person. Any new write endpoint needs the same care. The same applies to capacity: two people taking the last spot at the same moment can both get `going`. If that matters, run `POST /rsvp` with the workflow's concurrency limited to 1, or recheck the count after inserting and move the newer row to the waitlist.
 5. **Execution history.** The workflows save every successful execution. At this volume, save only failed executions to keep storage and the executions list manageable.

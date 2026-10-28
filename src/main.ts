@@ -248,6 +248,25 @@ function renderAuth(): void {
   slot.append(chip, out);
 }
 
+/* The trip page and the pitch form have no nav link of their own, so they
+   mark the section they belong to: aria-current="true" rather than "page". */
+const NAV_PARENT: Record<string, string> = {
+  detail: "workations",
+  pitch: "pitches",
+};
+
+function markNav(): void {
+  const own = el(`[data-nav="${view}"]`);
+  if (own) {
+    own.setAttribute("aria-current", "page");
+    return;
+  }
+  const parent = NAV_PARENT[view];
+  if (parent) {
+    el(`[data-nav="${parent}"]`)?.setAttribute("aria-current", "true");
+  }
+}
+
 function notify(message: string): void {
   const slot = el("[data-notice]");
   if (!slot) {
@@ -286,6 +305,7 @@ function boot(): void {
 
   setSession(isSignedIn());
   renderAuth();
+  markNav();
 
   const banner = el<HTMLButtonElement>("[data-signin]");
   if (banner) {
@@ -301,8 +321,9 @@ function boot(): void {
     );
   }
 
-  /* Signed out, every view is the intro, "What to expect" and the banner:
-     nothing to mount and nothing to fetch until signIn() succeeds. */
+  /* Signed out, home is the intro, "What to expect" and the banner, and every
+     other view just the banner: nothing to mount and nothing to fetch until
+     signIn() succeeds. */
   if (isSignedIn()) {
     mountView();
   }
@@ -354,23 +375,36 @@ function mountView(): void {
     return;
   }
 
-  const upcoming = el("[data-upcoming]");
-  const past = el("[data-past]");
-  const pastCount = el("[data-past-count]");
-  if (upcoming && past && pastCount) {
-    void mountWorkations(upcoming, past, pastCount);
+  if (view === "workations") {
+    document.title = "Workations — n8ncation";
+    const upcoming = el("[data-upcoming]");
+    const past = el("[data-past]");
+    const pastCount = el("[data-past-count]");
+    if (upcoming && past && pastCount) {
+      void mountWorkations(upcoming, past, pastCount);
+    }
+    return;
   }
 
-  const grid = el("[data-polls]");
-  const pollsState = el("[data-polls-state]");
-  if (grid && pollsState) {
-    mountPolls(grid, pollsState);
+  if (view === "vote") {
+    document.title = "Vote — n8ncation";
+    const grid = el("[data-polls]");
+    const pollsState = el("[data-polls-state]");
+    if (grid && pollsState) {
+      mountPolls(grid, pollsState);
+    }
+    return;
   }
 
-  const pitches = el("[data-pitches]");
-  if (pitches) {
-    void mountPitches(pitches);
+  if (view === "pitches") {
+    document.title = "Pitches — n8ncation";
+    const pitches = el("[data-pitches]");
+    if (pitches) {
+      void mountPitches(pitches);
+    }
   }
+
+  /* Home is the intro and "What to expect": public, with nothing to load. */
 }
 
 boot();

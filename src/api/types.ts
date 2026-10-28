@@ -109,7 +109,7 @@ export type PitchStatus = "open" | "cancelled" | "confirmed" | "expired";
 /** A pitch in GET /pitches. Everyone gets the open pitches, and the
     cancelled ones whose deadline hasn't passed, so the people interested in
     one can read why. On top of that, the caller gets every pitch they
-    organize, in any status, for "your pitches" on /me. Home shows only the
+    organize, in any status, for "your pitches" on /me. /pitches shows only the
     first group (see `isListed` in src/features/pitches.ts). */
 export interface Pitch {
   pitchId: string;
@@ -137,7 +137,7 @@ export interface Pitch {
   /** How many people have registered interest. */
   interested: number;
   /** Whether the caller has registered interest. Per caller, unlike
-      GET /workations: it saves home a second GET /me for one boolean. */
+      GET /workations: it saves /pitches a GET /me for one boolean. */
   interestedByMe: boolean;
   /** Whether the caller pitched it, which unlocks editing and cancelling.
       A flag rather than the organizer's sub, which never leaves n8n. The

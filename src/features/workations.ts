@@ -1,4 +1,4 @@
-/* n8ncations: the preview cards on the main page and the full card behind
+/* n8ncations: the preview cards on /workations and the full card behind
    /n8ncation/<slug>, which is where RSVP lives.
 
    Both views come from the same GET /workations payload. The detail page
@@ -82,11 +82,18 @@ function byDate(a: Workation, b: Workation, ascending: boolean): number {
 }
 
 /* ----------------------------------------------------------------
-   Preview cards, main page
+   Preview cards, /workations
    ---------------------------------------------------------------- */
 
-function buildCard(trip: Workation, past: boolean): HTMLElement {
+function buildCard(
+  trip: Workation,
+  past: boolean,
+  first: boolean,
+): HTMLElement {
   const card = template("trip-template");
+  /* Past trips are a quick overview, so their slides are smaller and drop
+     the description (see .trip-compact in styles.css). */
+  card.classList.toggle("trip-compact", past);
 
   const titleId = `trip-${trip.workationId}-title`;
   const heading = requireEl(card, ".edition");
@@ -104,9 +111,13 @@ function buildCard(trip: Workation, past: boolean): HTMLElement {
     if (trip.imageUrl) {
       photo.src = assetPath(trip.imageUrl);
       photo.alt = trip.imageAlt;
-      /* The upcoming card is the largest image above the fold. */
-      if (!past) {
+      /* The first upcoming card is the largest image above the fold. Past
+         slides mostly start off-screen in their carousel. */
+      if (!past && first) {
         photo.setAttribute("fetchpriority", "high");
+      }
+      if (past) {
+        photo.loading = "lazy";
       }
     } else {
       photo.remove();
@@ -123,6 +134,82 @@ function buildCard(trip: Workation, past: boolean): HTMLElement {
   renderDateRange(requireEl(card, ".dates"), trip.startDate, trip.endDate);
 
   return card;
+}
+
+/* ----------------------------------------------------------------
+   Carousel, /workations
+
+   A horizontally scrolling list with CSS scroll snapping, so touch,
+   trackpad and keyboard scrolling work without any code. The buttons only
+   add a way to page through with a mouse.
+   ---------------------------------------------------------------- */
+
+function buildTrack(cards: HTMLElement[], variant: string): HTMLElement {
+  const track = document.createElement("ul");
+  track.className = `carousel-track carousel-${variant}`;
+  for (const card of cards) {
+    const slide = document.createElement("li");
+    slide.className = "carousel-slide";
+    slide.appendChild(card);
+    track.appendChild(slide);
+  }
+  return track;
+}
+
+/* Pages by however many whole slides are in view. The controls stay hidden
+   while everything fits, and each end's button is marked unavailable with
+   aria-disabled rather than disabled, so a keyboard user's focus is not
+   dropped when they reach it. */
+function mountCarousel(track: HTMLElement, controls: HTMLElement): void {
+  const prev = requireEl(controls, "[data-carousel-prev]");
+  const next = requireEl(controls, "[data-carousel-next]");
+
+  const page = (): number => {
+    const slide = track.firstElementChild;
+    if (!(slide instanceof HTMLElement)) {
+      return track.clientWidth;
+    }
+    const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+    const step = slide.offsetWidth + gap;
+    return Math.max(1, Math.floor((track.clientWidth + gap) / step)) * step;
+  };
+
+  const update = (): void => {
+    /* A pixel of slack: scroll positions can land on fractions. */
+    const end = track.scrollWidth - track.clientWidth - 1;
+    controls.hidden = end <= 0;
+    prev.setAttribute("aria-disabled", String(track.scrollLeft <= 1));
+    next.setAttribute("aria-disabled", String(track.scrollLeft >= end));
+  };
+
+  /* No behavior option: the track's scroll-behavior in styles.css decides,
+     so reduced motion is honored there. */
+  prev.addEventListener("click", () => {
+    track.scrollBy({ left: -page() });
+  });
+  next.addEventListener("click", () => {
+    track.scrollBy({ left: page() });
+  });
+  track.addEventListener("scroll", update, { passive: true });
+  new ResizeObserver(update).observe(track);
+  update();
+}
+
+/* Fills a section's slot with a carousel of cards. The controls sit in the
+   same section's heading. */
+function renderCarousel(
+  slot: HTMLElement,
+  cards: HTMLElement[],
+  variant: string,
+): void {
+  const track = buildTrack(cards, variant);
+  slot.appendChild(track);
+  const controls = slot
+    .closest("section")
+    ?.querySelector<HTMLElement>("[data-carousel-controls]");
+  if (controls) {
+    mountCarousel(track, controls);
+  }
 }
 
 function buildEmptyState(upcoming: Workation[]): HTMLElement {
@@ -182,11 +269,14 @@ export async function mountWorkations(
     const none = document.createElement("p");
     none.className = "trip-state";
     none.textContent =
-      "Nothing on the calendar right now. The poll below decides the next one.";
+      "Nothing on the calendar right now. The polls under Vote decide the next one.";
     upcomingSlot.appendChild(none);
-  }
-  for (const trip of upcoming) {
-    upcomingSlot.appendChild(buildCard(trip, false));
+  } else {
+    renderCarousel(
+      upcomingSlot,
+      upcoming.map((trip, index) => buildCard(trip, false, index === 0)),
+      "upcoming",
+    );
   }
 
   /* The heading is written singular in the markup, which stops being true the
@@ -199,9 +289,12 @@ export async function mountWorkations(
   pastSlot.replaceChildren();
   if (past.length === 0) {
     pastSlot.appendChild(buildEmptyState(upcoming));
-  }
-  for (const trip of past) {
-    pastSlot.appendChild(buildCard(trip, true));
+  } else {
+    renderCarousel(
+      pastSlot,
+      past.map((trip) => buildCard(trip, true, false)),
+      "past",
+    );
   }
   pastCount.textContent = String(past.length).padStart(2, "0");
 }

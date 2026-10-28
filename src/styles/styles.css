@@ -91,15 +91,16 @@ li {
   top: var(--space-12);
 }
 
-/* One document holds both views; the inline script in index.html sets
+/* One document holds every view; the inline script in index.html sets
    data-view on <html> before first paint. display: none rather than
    [hidden], so the hidden view also leaves the accessibility tree and the
-   page never announces two h1s. The detail and me rules are written with
-   :not so that with JavaScript off — data-view never set — the home page is
-   what shows. */
-[data-view="detail"] [data-only="home"],
-[data-view="me"] [data-only="home"],
-[data-view="pitch"] [data-only="home"],
+   page never announces two h1s. The home rule only applies once data-view is
+   set, and the others are written with :not, so that with JavaScript off —
+   data-view never set — the home page is what shows. */
+:root[data-view]:not([data-view="home"]) [data-only="home"],
+:root:not([data-view="workations"]) [data-only="workations"],
+:root:not([data-view="vote"]) [data-only="vote"],
+:root:not([data-view="pitches"]) [data-only="pitches"],
 :root:not([data-view="detail"]) [data-only="detail"],
 :root:not([data-view="me"]) [data-only="me"],
 :root:not([data-view="pitch"]) [data-only="pitch"] {
@@ -225,9 +226,15 @@ li {
   padding: var(--space-8) 0;
 }
 
-.header nav a:hover {
+.header nav a:hover,
+.header nav a[aria-current] {
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+/* The page you are on, or the section a trip or the pitch form belongs to. */
+.header nav a[aria-current] {
+  text-decoration-thickness: 2px;
 }
 
 /* ----------------------------------------------------------------
@@ -294,13 +301,23 @@ li {
   line-height: 36px;
 }
 
+/* The top of /workations, /vote and /pitches. */
+.page-head {
+  display: grid;
+  gap: var(--space-16);
+  padding: var(--space-32) 0 var(--space-48);
+}
+
 /* ----------------------------------------------------------------
    Trip card
    ---------------------------------------------------------------- */
 
+/* A carousel slide: photo on top, details below. Full height, so every
+   slide in a row ends on the same line. */
 .trip {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   border: 1px solid var(--stroke-secondary);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -309,7 +326,8 @@ li {
 
 .trip-photo {
   position: relative;
-  min-height: 392px;
+  flex-shrink: 0;
+  aspect-ratio: 3 / 2;
   overflow: hidden;
   background: var(--background-tertiary);
 }
@@ -332,6 +350,7 @@ li {
 
 .trip-details {
   display: flex;
+  flex: 1;
   flex-direction: column;
   padding: var(--space-32);
 }
@@ -405,6 +424,144 @@ li {
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--type-secondary);
+}
+
+/* Past trips: a smaller slide for a quick overview. The status capsule
+   would only repeat the section heading, and the description is one click
+   away on the trip page. */
+.trip-compact .status,
+.trip-compact .trip-description {
+  display: none;
+}
+
+.trip-compact .photo-label {
+  bottom: var(--space-16);
+  left: var(--space-16);
+}
+
+.trip-compact .trip-details {
+  padding: var(--space-24);
+}
+
+/* body-lg/medium */
+.trip-compact .edition {
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.trip-compact .edition a {
+  text-underline-offset: 4px;
+}
+
+.trip-compact .destination {
+  margin-top: var(--space-16);
+}
+
+/* heading-x-sm */
+.trip-compact .destination .place {
+  font-size: 24px;
+  line-height: 24px;
+  letter-spacing: 0;
+}
+
+/* body-md */
+.trip-compact .dates {
+  margin-top: var(--space-8);
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.trip-compact .trip-attendees {
+  padding-top: var(--space-16);
+}
+
+/* ----------------------------------------------------------------
+   Carousel, /workations
+
+   One row of slides that scrolls sideways and snaps each slide to the
+   left edge. The scrollbar is hidden: touch and trackpads scroll the row
+   directly, and the buttons in the section heading page through it.
+   ---------------------------------------------------------------- */
+
+.carousel-track {
+  display: grid;
+  grid-auto-flow: column;
+  gap: var(--space-24);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+.carousel-slide {
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+/* Upcoming: two generous slides in view. */
+.carousel-upcoming {
+  grid-auto-columns: calc((100% - var(--space-24)) / 2);
+}
+
+/* Past: four compact slides in view. */
+.carousel-past {
+  grid-auto-columns: calc((100% - 3 * var(--space-24)) / 4);
+}
+
+.carousel-controls {
+  display: flex;
+  gap: var(--space-8);
+  align-self: center;
+  margin-left: auto;
+}
+
+.carousel-controls[hidden] {
+  display: none;
+}
+
+/* body-xl, for the arrow. */
+.carousel-button {
+  display: grid;
+  place-items: center;
+  width: var(--space-48);
+  height: var(--space-48);
+  border: 1px solid var(--stroke-secondary);
+  border-radius: var(--radius-full);
+  background: var(--interactive-primary-default);
+  color: var(--type-primary);
+  font: inherit;
+  font-size: 18px;
+  line-height: 22px;
+  cursor: pointer;
+}
+
+.carousel-button:not([aria-disabled="true"]):hover {
+  border-color: var(--stroke-primary);
+  background: var(--interactive-primary-hover);
+}
+
+.carousel-button:not([aria-disabled="true"]):active {
+  background: var(--interactive-primary-pressed);
+}
+
+.carousel-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* At an end of the row: still focusable, but visibly unavailable. */
+.carousel-button[aria-disabled="true"] {
+  background: transparent;
+  color: var(--type-secondary);
+  cursor: default;
 }
 
 /* Placeholder, empty and error lines for anything loaded from the API.
@@ -576,8 +733,9 @@ li {
    Polls
    ---------------------------------------------------------------- */
 
+/* The whole of /vote, so it takes the page spacing of /pitch. */
 .polls {
-  padding-top: var(--space-64);
+  padding: var(--space-32) 0 var(--space-64);
 }
 
 /* body-lg */
@@ -907,6 +1065,16 @@ li {
 
 .expectations li + li {
   margin-top: var(--space-16);
+}
+
+/* The "organized by employees, not sponsored" disclaimer. A side note
+   rather than a fourth point, so it sits under a divider. body-md */
+.about-copy .about-note {
+  margin-top: var(--space-32);
+  padding-top: var(--space-24);
+  border-top: 1px solid var(--stroke-secondary);
+  font-size: 14px;
+  line-height: 18px;
 }
 
 .expectations strong {
@@ -1552,8 +1720,9 @@ footer > span {
    that does not exist yet.
    ---------------------------------------------------------------- */
 
+/* The whole of /pitches, so it takes the page spacing of /pitch. */
 .pitches {
-  padding-top: var(--space-64);
+  padding: var(--space-32) 0 var(--space-64);
 }
 
 .pitches-lead {
@@ -1804,7 +1973,8 @@ footer > span {
 }
 
 /* heading-x-lg */
-.pitch-page-title {
+.pitch-page-title,
+.page-title {
   font-size: 48px;
   line-height: 48px;
   letter-spacing: -0.01em;
@@ -1853,8 +2023,9 @@ footer > span {
     width: calc(100% - var(--space-64));
   }
 
-  .trip-photo {
-    min-height: 408px;
+  /* Three compact slides in view. */
+  .carousel-past {
+    grid-auto-columns: calc((100% - 2 * var(--space-24)) / 3);
   }
 
   .trip-details {
@@ -1926,11 +2097,6 @@ footer > span {
     line-height: 18px;
   }
 
-  /* Drop "Workations" from the nav; the section is the first thing below. */
-  .header nav a:first-child {
-    display: none;
-  }
-
   .wrap {
     width: calc(100% - var(--space-40));
   }
@@ -1957,13 +2123,18 @@ footer > span {
     margin-bottom: var(--space-16);
   }
 
-  .trip {
-    grid-template-columns: 1fr;
+  /* One slide in view, with the edge of the next one showing so the row
+     reads as scrollable. */
+  .carousel-track {
+    gap: var(--space-16);
   }
 
-  .trip-photo {
-    min-height: 0;
-    height: 256px;
+  .carousel-upcoming {
+    grid-auto-columns: 85%;
+  }
+
+  .carousel-past {
+    grid-auto-columns: 70%;
   }
 
   .trip-details {
@@ -1976,10 +2147,6 @@ footer > span {
 
   .trip-description {
     margin-top: var(--space-24);
-  }
-
-  .polls {
-    padding-top: var(--space-48);
   }
 
   .poll-grid {
@@ -2088,12 +2255,9 @@ footer > span {
     grid-template-columns: 1fr;
   }
 
-  .pitches {
-    padding-top: var(--space-48);
-  }
-
   /* heading-lg */
-  .pitch-page-title {
+  .pitch-page-title,
+  .page-title {
     font-size: 40px;
     line-height: 42px;
   }
@@ -2121,7 +2285,8 @@ footer > span {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
+  html,
+  .carousel-track {
     scroll-behavior: auto;
   }
 

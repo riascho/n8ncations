@@ -96,7 +96,7 @@ function personFor(sub: string): Person {
 }
 
 /* Stands in for the `workations` Data Table. Three rows — two upcoming, one
-   past — so both sections of the main page have something to render and the
+   past — so both sections of /workations have something to render and the
    date range formatting gets exercised across a month boundary.
 
    The capacities are set up to exercise both RSVP outcomes: Roche has one

@@ -1,7 +1,7 @@
 /* Pitches: trips anyone can propose, which go ahead only with enough
    interest.
 
-   - Home, #pitches: one card per open pitch, with an "I'm interested"
+   - /pitches: one card per open pitch, with an "I'm interested"
      toggle and progress towards the pitch's threshold. The organizer's own
      card can also be edited or cancelled. A cancelled pitch stays listed,
      with the organizer's reason, until its deadline.
@@ -84,7 +84,7 @@ function editPath(pitchId: string): string {
 }
 
 /* ----------------------------------------------------------------
-   Cards, home page
+   Cards, /pitches
    ---------------------------------------------------------------- */
 
 interface PitchView {
@@ -351,7 +351,7 @@ function byDeadline(a: Pitch, b: Pitch): number {
   return ordinal(left) - ordinal(right);
 }
 
-/* Home lists what everyone gets from GET /pitches: open pitches, and
+/* /pitches lists what everyone gets from GET /pitches: open pitches, and
    cancelled ones until their deadline. The caller's own closed pitches,
    which the route also sends, are only for /me. */
 function isListed(pitch: Pitch): boolean {
@@ -643,7 +643,7 @@ async function submitPitch(v: FormView): Promise<void> {
 
   /* Not optimistic, whether new or edited: there is nothing on this page to
      update. The form locks until the pitch is stored, then hands over to the
-     list on home. */
+     list on /pitches. */
   v.busy = true;
   renderForm(v);
   const editing = v.editing;
@@ -658,7 +658,7 @@ async function submitPitch(v: FormView): Promise<void> {
       await api.createPitch(result);
       v.status.textContent = "Pitch submitted. Taking you to the list…";
     }
-    location.assign(`${appPath("/")}#pitches`);
+    location.assign(appPath("/pitches"));
   } catch (error) {
     v.busy = false;
     renderForm(v);

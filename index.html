@@ -9,7 +9,7 @@
       content="n8ncation brings n8n colleagues together for a week of working across teams and spending time together. Explore our upcoming and past workations."
     />
     <!-- Replaced on the other views: with the edition once a trip card loads
-         (src/features/workations.ts), and on /me by src/main.ts. -->
+         (src/features/workations.ts), and on the rest by src/main.ts. -->
     <title>n8ncation — n8n workations</title>
     <!-- Official symbol from the n8n brand portal. The symbol alone is the
          right mark for a favicon; never draw or approximate a substitute. -->
@@ -18,7 +18,8 @@
       type="image/svg+xml"
       href="%BASE_URL%n8n-symbol-accent.svg"
     />
-    <!-- This one file serves /, /n8ncation/<slug> and /me: every unknown path
+    <!-- This one file serves every view (/, /workations, /vote, /pitches,
+         /n8ncation/<slug>, /pitch and /me): every unknown path
          falls back to index.html (Vite's default SPA fallback in dev and
          preview, and what any future host has to be configured to do), so
          there is no rewrite rule to keep in step between environments.
@@ -40,20 +41,33 @@
             path = path.slice(prefix.length);
           }
         }
-        document.documentElement.dataset.view =
-          path === "/me" || path === "/me/"
-            ? "me"
-            : path === "/pitch" || path === "/pitch/"
-              ? "pitch"
-              : path.startsWith("/n8ncation/")
-                ? "detail"
-                : "home";
+        /* Path (without a trailing slash) to view. */
+        var views = {
+          "/workations": "workations",
+          "/vote": "vote",
+          "/pitches": "pitches",
+          "/pitch": "pitch",
+          "/me": "me",
+        };
+        var key = path.length > 1 ? path.replace(/\/$/, "") : path;
+        document.documentElement.dataset.view = views.hasOwnProperty(key)
+          ? views[key]
+          : path.startsWith("/n8ncation/")
+            ? "detail"
+            : "home";
       })();
     </script>
   </head>
   <body>
-    <a class="skip" href="#workations" data-only="home" data-private
+    <a class="skip" href="#about" data-only="home">Skip to what to expect</a>
+    <a class="skip" href="#workations" data-only="workations" data-private
       >Skip to workations</a
+    >
+    <a class="skip" href="#polls" data-only="vote" data-private
+      >Skip to the polls</a
+    >
+    <a class="skip" href="#pitches" data-only="pitches" data-private
+      >Skip to pitches</a
     >
     <a class="skip" href="#workation" data-only="detail" data-private
       >Skip to the n8ncation</a
@@ -74,11 +88,14 @@
           height="24"
         /><span class="brand-divider"></span><span>n8ncation</span></a
       >
+      <!-- data-nav names the view each link opens. src/main.ts marks the
+           current one with aria-current. -->
       <nav aria-label="Main navigation">
-        <a href="%BASE_URL%#workations" data-private>Workations</a
-        ><a href="%BASE_URL%#polls" data-private>Vote</a
-        ><a href="%BASE_URL%#pitches" data-private>Pitches</a
-        ><a href="%BASE_URL%#about">What to expect</a>
+        <a href="%BASE_URL%" data-nav="home">About</a
+        ><a href="%BASE_URL%workations" data-nav="workations" data-private
+          >Workations</a
+        ><a href="%BASE_URL%vote" data-nav="vote" data-private>Vote</a
+        ><a href="%BASE_URL%pitches" data-nav="pitches" data-private>Pitches</a>
       </nav>
       <div class="auth" data-auth></div>
     </header>
@@ -508,7 +525,7 @@
             <div class="form-actions field-wide">
               <a
                 class="auth-button auth-button-quiet"
-                href="%BASE_URL%#pitches"
+                href="%BASE_URL%pitches"
                 data-pitch-back
                 >Cancel</a
               >
@@ -539,15 +556,45 @@
         </p>
         <button class="auth-button" type="button" data-signin>Sign in</button>
       </section>
+      <!-- /workations: upcoming and past trips, filled from GET /workations
+           by mountWorkations(). -->
+      <div class="page-head wrap" data-only="workations" data-private>
+        <h1 class="page-title">n8ncations</h1>
+        <p class="polls-intro">
+          Where we’re going next and where we’ve been. Open an upcoming trip to
+          RSVP.
+        </p>
+      </div>
       <section
         class="workations wrap"
         id="workations"
-        data-only="home"
+        data-only="workations"
         data-private
         aria-labelledby="upcoming-title"
       >
+        <!-- The carousel controls are wired by mountCarousel() in
+             src/features/workations.ts, and stay hidden while every card
+             fits. -->
         <div class="section-heading">
           <h2 id="upcoming-title">Upcoming n8ncation</h2>
+          <div class="carousel-controls" data-carousel-controls hidden>
+            <button
+              class="carousel-button"
+              type="button"
+              data-carousel-prev
+              aria-label="Previous upcoming n8ncations"
+            >
+              <span aria-hidden="true">←</span>
+            </button>
+            <button
+              class="carousel-button"
+              type="button"
+              data-carousel-next
+              aria-label="Next upcoming n8ncations"
+            >
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
         </div>
         <noscript>
           <p class="trip-state">
@@ -591,17 +638,21 @@
               vibrant new setting that creates unforgettable memories.
             </li>
           </ul>
+          <p class="about-note">
+            n8ncations are organized by n8n employees, for n8n employees. They
+            aren’t sponsored by n8n directly, at least not yet.
+          </p>
         </div>
       </section>
       <section
         class="polls wrap"
         id="polls"
-        data-only="home"
+        data-only="vote"
         data-private
         aria-labelledby="polls-title"
       >
         <div class="section-heading">
-          <h2 id="polls-title">Help plan the next one</h2>
+          <h1 class="page-title" id="polls-title">Help plan the next one</h1>
         </div>
         <p class="polls-intro">
           Two quick questions. Results are shared with the whole team and update
@@ -623,12 +674,12 @@
       <section
         class="pitches wrap"
         id="pitches"
-        data-only="home"
+        data-only="pitches"
         data-private
         aria-labelledby="pitches-title"
       >
         <div class="section-heading">
-          <h2 id="pitches-title">Pitched n8ncations</h2>
+          <h1 class="page-title" id="pitches-title">Pitched n8ncations</h1>
         </div>
         <div class="pitches-lead">
           <p class="polls-intro">
@@ -645,7 +696,9 @@
         </div>
       </section>
       <!-- One preview card per n8ncation, filled from GET /workations. The
-           heading links through to /n8ncation/<slug> for the full card. -->
+           heading links through to /n8ncation/<slug> for the full card.
+           Each card is a slide in a carousel on /workations; past trips add
+           .trip-compact, which drops the description and status. -->
       <template id="trip-template">
         <article class="trip">
           <div class="trip-photo">
@@ -802,19 +855,37 @@
       </template>
       <section
         class="past wrap"
-        data-only="home"
+        data-only="workations"
         data-private
         aria-labelledby="past-title"
       >
         <div class="section-heading">
           <h2 id="past-title">Past n8ncations</h2>
           <span class="count" data-past-count>00</span>
+          <div class="carousel-controls" data-carousel-controls hidden>
+            <button
+              class="carousel-button"
+              type="button"
+              data-carousel-prev
+              aria-label="Previous past n8ncations"
+            >
+              <span aria-hidden="true">←</span>
+            </button>
+            <button
+              class="carousel-button"
+              type="button"
+              data-carousel-next
+              aria-label="Next past n8ncations"
+            >
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
         </div>
         <div data-past></div>
       </section>
     </main>
     <footer class="wrap">
-      <a class="brand" href="%BASE_URL%#" aria-label="Back to top"
+      <a class="brand" href="#" aria-label="Back to top"
         ><img
           class="n8n-logo"
           src="%BASE_URL%n8n-logo-black-accent.svg"
