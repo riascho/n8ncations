@@ -40,6 +40,18 @@ Before you design or build any UI, read n8ndesign.md and follow it exactly: colo
 
 I build and edit the n8n workflows myself. If a change needs the backend to change (a new route, a new field, a different response shape), don't work around it in the frontend with tolerant parsing or shims. Instead, tell me exactly what to change in which workflow and node, and update the contract in `types.ts` and README.md to match. Update the affected blueprint in `.n8n/workflows/` and its description in `.n8n/README.md` in the same change. The n8n MCP can read the live workflows and Data Tables: use it to check the live state, and log anything that differs from the contract in `.n8n/DISCREPANCIES.md`. Don't change the live instance through the MCP unless I ask you to.
 
+### Working with the n8n MCP
+
+The n8n MCP is connected. Use it to check the live state before you reason about the backend, instead of relying on the blueprints alone.
+
+1. Read the live workflow with `get_workflow_details` before patching. Don't assume it matches its blueprint.
+2. Always set `versionName` on `update_workflow` and `create_workflow_from_code`, written like a commit message, plus a `versionDescription` saying why. `publish_workflow` has no name field; it publishes the version that the update created.
+3. After changing, read the workflow back and check `activeVersion.sameAsDraft` before saying it's done.
+4. Approval to change the live instance covers one set of changes. Ask again for the next.
+5. Update the blueprint in `.n8n/workflows/` and `.n8n/README.md` in the same change, and generate live changes from the blueprint so the two match.
+6. New workflows go in the project `uAascgo7459L25P4`. If related to the API endpoints use the folder "API endpoints" (`r2395Of2mvIkdy5V`). Check that webhooks use the JWT Auth account credential (`EF3FVWn29g6p0qdG`).
+7. Read execution results with `search_workflow_executions` and `get_workflow_execution`, and check a real execution before saying a route works. Test runs have no session JWT, so they can't exercise the JWT Auth path. If no real execution confirms a change, say the route is untested rather than implying it was tested.
+
 ## After every change
 
 Review README.md and any code comments that reference the changed code or behavior, and update them if they no longer match. This covers the API table, the file layout, the Extending steps and mock mode in README.md, and the route behavior, Data Tables and blueprints in `.n8n/`.
