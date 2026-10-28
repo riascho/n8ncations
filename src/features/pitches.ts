@@ -247,7 +247,8 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
     pitch.endDate,
   );
   requireEl(card, ".pitch-description").textContent = pitch.description;
-  requireEl(card, ".pitch-capacity").textContent = `Up to ${pitch.capacity}`;
+  requireEl(card, ".pitch-capacity").textContent =
+    pitch.capacity === null ? "No limit" : `Up to ${pitch.capacity}`;
 
   const cost = requireEl(card, ".pitch-cost");
   if (pitch.costEstimate !== null) {
@@ -559,26 +560,31 @@ function readPitch(form: HTMLFormElement): NewPitch | Problem {
   if (!endDate || endDate < startDate) {
     return { field: "endDate", message: "The trip ends before it starts." };
   }
+  /* Optional: empty means no limit, like a trip's capacity. */
   if (
-    capacity === null ||
-    Number.isNaN(capacity) ||
-    capacity < PITCH_LIMITS.minPeople ||
-    capacity > PITCH_LIMITS.maxPeople
+    capacity !== null &&
+    (Number.isNaN(capacity) ||
+      capacity < PITCH_LIMITS.minPeople ||
+      capacity > PITCH_LIMITS.maxPeople)
   ) {
     return {
       field: "capacity",
-      message: `Group size must be between ${PITCH_LIMITS.minPeople} and ${PITCH_LIMITS.maxPeople}.`,
+      message: `Group size must be between ${PITCH_LIMITS.minPeople} and ${PITCH_LIMITS.maxPeople}, or empty for no limit.`,
     };
   }
+  /* Always required: it decides whether the trip goes ahead. */
   if (
     threshold === null ||
     Number.isNaN(threshold) ||
     threshold < PITCH_LIMITS.minPeople ||
-    threshold > capacity
+    threshold > (capacity ?? PITCH_LIMITS.maxPeople)
   ) {
     return {
       field: "threshold",
-      message: `Interest needed must be between ${PITCH_LIMITS.minPeople} and the group size.`,
+      message:
+        capacity === null
+          ? `Interest needed must be between ${PITCH_LIMITS.minPeople} and ${PITCH_LIMITS.maxPeople}.`
+          : `Interest needed must be between ${PITCH_LIMITS.minPeople} and the group size.`,
     };
   }
   if (!deadline || deadline < today || deadline >= startDate) {
@@ -671,7 +677,8 @@ function fillForm(form: HTMLFormElement, pitch: Pitch): void {
   input(form, "startDate").value = pitch.startDate;
   input(form, "endDate").value = pitch.endDate;
   input(form, "description").value = pitch.description;
-  input(form, "capacity").value = String(pitch.capacity);
+  input(form, "capacity").value =
+    pitch.capacity === null ? "" : String(pitch.capacity);
   input(form, "threshold").value = String(pitch.threshold);
   input(form, "deadline").value = pitch.deadline;
   input(form, "costEstimate").value =

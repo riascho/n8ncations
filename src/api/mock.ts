@@ -272,7 +272,8 @@ const pitchRows: PitchRow[] = [
     description:
       "A shorter trip on the west coast. Mornings at work, afternoons on the coast or in town.",
     accommodationUrl: "",
-    capacity: 8,
+    /* No limit, so the card's "No limit" path gets exercised. */
+    capacity: null,
     threshold: 6,
     deadline: "2027-01-31",
     costEstimate: null,
@@ -559,7 +560,7 @@ function rejectInvalid(pitch: NewPitch): void {
   if (
     !pitch.place ||
     !pitch.description ||
-    pitch.threshold > pitch.capacity ||
+    (pitch.capacity !== null && pitch.threshold > pitch.capacity) ||
     pitch.startDate > pitch.endDate ||
     pitch.deadline >= pitch.startDate
   ) {

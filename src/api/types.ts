@@ -123,7 +123,9 @@ export interface Pitch {
   description: string;
   /** http(s) link to the place people would stay, or "" when none. */
   accommodationUrl: string;
-  capacity: number;
+  /** Spots on the trip, or null for no limit (and so no waitlist), like a
+      trip's capacity. */
+  capacity: number | null;
   /** Interested people needed by `deadline` for the trip to go ahead. */
   threshold: number;
   /** YYYY-MM-DD. The last day interest counts. */
@@ -157,7 +159,8 @@ export interface NewPitch {
   endDate: string;
   description: string;
   accommodationUrl: string | null;
-  capacity: number;
+  /** null for no limit. */
+  capacity: number | null;
   threshold: number;
   deadline: string;
   costEstimate: number | null;
