@@ -285,6 +285,16 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
     organizer.remove();
   }
 
+  /* The pitch's thread in the Slack channel, posted when it was pitched.
+     Pitches from before the Slack bot have none. */
+  const slack = requireEl(card, "[data-fact=slack]");
+  const threadUrl = pitch.slackUrl ? safeUrl(pitch.slackUrl) : null;
+  if (threadUrl) {
+    requireEl(slack, "a").setAttribute("href", threadUrl);
+  } else {
+    slack.remove();
+  }
+
   const cancelForm = requireEl(card, ".pitch-cancel");
   const reasonField = requireEl(cancelForm, "textarea");
   if (
@@ -373,14 +383,27 @@ function isListed(pitch: Pitch): boolean {
 export async function mountPitches(slot: HTMLElement): Promise<void> {
   const state = slot.querySelector("[data-pitches-state]");
   let pitches: Pitch[];
+  let slackChannelUrl: string;
   try {
-    ({ pitches } = await api.getPitches());
+    ({ pitches, slackChannelUrl } = await api.getPitches());
     pitches = pitches.filter(isListed);
   } catch (error) {
     if (state) {
       state.textContent = describe(error, "The pitches could not be loaded.");
     }
     return;
+  }
+
+  /* The channel link sits in the page's lead, outside the grid. It is only
+     revealed now that GET /pitches has succeeded, and stays hidden while
+     the SLACK_CHANNEL_URL variable is unset. */
+  const channel = slot
+    .closest("section")
+    ?.querySelector<HTMLElement>("[data-pitches-slack]");
+  const channelUrl = slackChannelUrl ? safeUrl(slackChannelUrl) : null;
+  if (channel && channelUrl) {
+    requireEl(channel, "a").setAttribute("href", channelUrl);
+    channel.hidden = false;
   }
 
   slot.replaceChildren();

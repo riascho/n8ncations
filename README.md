@@ -10,6 +10,7 @@ An internal site for planning n8n team workations. Colleagues sign in with their
 - edit or cancel a pitch they submitted, giving a reason that everyone sees on the pitch until its deadline
 - vote on which months and locations work for the next one, and suggest new locations
 - keep a small profile (team, job title) and see the trips they signed up for
+- talk pitches through in `#mission-n8n-workations` on Slack: every new pitch gets a thread there. A bot also tells organizers about interest and sign-ups, and tells everyone when a pitch becomes a trip (see [Slack notifications](.n8n/README.md#slack-notifications))
 
 The UI follows the post-rebrand n8n design system described in [`n8ndesign.md`](n8ndesign.md). Its tokens are implemented in `src/styles/tokens.css`.
 
@@ -32,7 +33,13 @@ The UI follows the post-rebrand n8n design system described in [`n8ndesign.md`](
                                                │ n8n workflow             │ ────────────────┘
                                                │ "Pitch decisions"        │
                                                │ (Schedule, daily)        │
-                                               └──────────────────────────┘
+                                               └────────────┬─────────────┘
+                                   pitch, interest, RSVP and│decision routes call it
+                                               ┌────────────▼─────────────┐        ┌──────────────────┐
+                                               │ n8n sub-workflow         │ ─────▶ │ Slack            │
+                                               │ "Slack notify"           │        │ #mission-n8n-    │
+                                               └──────────────────────────┘        │ workations + DMs │
+                                                                                   └──────────────────┘
 ```
 
 - **Frontend:** a single `index.html` holds every view, plus TypeScript modules bundled by Vite. It has no runtime dependencies.
@@ -202,7 +209,7 @@ Each route is its own n8n workflow, named after its path (`/workations`, `/me`, 
 | GET    | `/logistics`      | JWT  | query `?workationId=`                                                            | `200 { mine: Logistics \| null }`                                                                                                                                  | `logistics` (read)                                                          |
 | POST   | `/logistics`      | JWT  | `{ workationId, dietary, roomPreference, arrival, departure, emergencyContact }` | no body                                                                                                                                                            | `signups` (read), `logistics` (upsert)                                      |
 | GET    | `/roster`         | JWT  | query `?workationId=`                                                            | `200 { people: RosterEntry[] }`, `404` unless you organize the trip                                                                                                | `workations`, `signups`, `profiles`, `logistics` (read)                     |
-| GET    | `/pitches`        | JWT  | —                                                                                | `200 { pitches: Pitch[] }`: open pitches, cancelled ones until their deadline, and every pitch you organize in any status                                          | `pitches`, `pitch_interest`, `profiles` (read)                              |
+| GET    | `/pitches`        | JWT  | —                                                                                | `200 { pitches: Pitch[], slackChannelUrl }`: open pitches, cancelled ones until their deadline, and every pitch you organize in any status                         | `pitches`, `pitch_interest`, `profiles` (read)                              |
 | POST   | `/pitch`          | JWT  | `NewPitch` (see below)                                                           | `201 { pitchId }`, `400 { message }` when invalid                                                                                                                  | `pitches` (insert), `pitch_interest` (insert)                               |
 | POST   | `/pitch-update`   | JWT  | `PitchUpdate` = `NewPitch` + `pitchId`                                           | `200`, no body. `400 { message }` when invalid or closed, `404` unless you organize the pitch                                                                      | `pitches` (read/update)                                                     |
 | POST   | `/pitch-cancel`   | JWT  | `{ pitchId: string, reason: string }`                                            | `200`, no body. `400 { message }` when the reason is empty or the pitch is closed, `404` unless you organize the pitch                                             | `pitches` (read/update)                                                     |
@@ -213,7 +220,7 @@ Each route is its own n8n workflow, named after its path (`/workations`, `/me`, 
 `Workation` = `{ workationId, slug, title, place, startDate, endDate, description, imageUrl, imageAlt, accommodationUrl, costEstimate: number | null, costIncludes, attendees, capacity: number | null, waitlisted, organizer: { name, … } | null }`. For a trip that started as a pitch, the photo, accommodation link and cost are copied over from the pitch.
 `Logistics` = `{ dietary, roomPreference, arrival, departure, emergencyContact }`, every field `string | null`. `arrival` and `departure` are `YYYY-MM-DDTHH:MM` in destination time.
 `RosterEntry` = `{ name, email, team, status: "going" | "waitlist", position: number | null, logistics: Logistics | null }`.
-`Pitch` = `{ pitchId, status: "open" | "cancelled" | "confirmed" | "expired", cancelReason, place, startDate, endDate, description, accommodationUrl, imageUrl, imageAlt, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes, interested, interestedByMe, organizedByMe, organizer: { name } | null }`. `cancelReason` is `""` unless cancelled. `/pitches` shows only open pitches and cancelled ones before their deadline; your other pitches are only for `/me`.
+`Pitch` = `{ pitchId, status: "open" | "cancelled" | "confirmed" | "expired", cancelReason, place, startDate, endDate, description, accommodationUrl, imageUrl, imageAlt, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes, interested, interestedByMe, organizedByMe, organizer: { name } | null, slackUrl }`. `cancelReason` is `""` unless cancelled. `slackUrl` links to the pitch's Slack thread, `""` when it has none. `slackChannelUrl` links to the channel, `""` when the `SLACK_CHANNEL_URL` variable is unset; the link on `/pitches` only shows when it's set. `/pitches` shows only open pitches and cancelled ones before their deadline; your other pitches are only for `/me`.
 `NewPitch` = `{ place, startDate, endDate, description, accommodationUrl: string | null, imageUrl: string | null, imageAlt: string | null, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes: string | null }`.
 **Photos are links, never uploads.** `imageUrl` is an `https` link to an image already online, usually copied from the accommodation's website ("Copy image address"), so only the URL is stored. The pitch form loads the link before it can be submitted, because only a browser can tell an image link from a link to a web page. Photos are shown with `referrerpolicy="no-referrer"`, since many sites refuse images embedded elsewhere when they see a Referer. A link that breaks later (the listing is taken down, or the URL expires) falls back to the grey photo area. Loading a photo tells its host the viewer's IP address, but not which page they're on.
 The full contract is in `src/api/types.ts`.
@@ -227,6 +234,7 @@ The full contract is in `src/api/types.ts`.
 When `VITE_API_BASE` is empty, `client.ts` routes every call to `src/api/mock.ts`:
 
 - In-memory seed data: three trips, some votes and signups, one suggested location, three open pitches and some logistics. Roche (upcoming) has one spot left and is organized by the demo user, so it shows the attendee list. Lapland (upcoming) is full, so signing up joins the waitlist. Lisbon is past. Roche also carries an accommodation link and a cost, as a confirmed pitch would, so its page shows them; the other two show neither. No seed pitch has a photo, because a photo must be an `https` link and the mock runs on `http://localhost`; paste any https image link into the form to try it. The demo user pitched Lake Bled, so its card has the edit and cancel controls, and it is listed under "Your pitches" on `/me`, along with two closed demo pitches (Tallinn expired, Roche went ahead) folded away below.
+- Porto and Lake Bled carry a placeholder Slack thread link, and `/pitches` shows a placeholder channel link (`example.slack.com`). Mock mode sends no Slack messages.
 - Nothing confirms or expires pitches in mock mode, since that's the scheduled workflow's job. Pages are separate documents, so a pitch submitted or edited on `/pitch` is back to its seed state by the time `/pitches` loads. Cancelling happens on `/pitches`, so it stays visible until you reload.
 - **Sign in (demo)** creates a local, **unsigned** session for "Demo Colleague". n8n would reject this token; it exists only to drive the mock.
 - Every call waits about 260 ms to simulate the network. All state resets on reload, and a banner says so.

@@ -250,9 +250,18 @@ function logisticsKey(workationId: string, sub: string): string {
    that became the Roche trip) only show under "your pitches" on /me. */
 type PitchRow = Omit<
   Pitch,
-  "interested" | "interestedByMe" | "organizedByMe" | "organizer"
+  "interested" | "interestedByMe" | "organizedByMe" | "organizer" | "slackUrl"
 > & {
   organizerSub: string;
+};
+
+/* Stand-ins for the Slack links the workflows send. Porto and Lake Bled have
+   a discussion thread; the others show the card without one, like a pitch
+   from before the Slack bot. */
+const SLACK_CHANNEL_URL = "https://example.slack.com/archives/C0MOCK";
+const slackThreads: Record<string, string> = {
+  "p-01": `${SLACK_CHANNEL_URL}/p1730198400000100`,
+  "p-03": `${SLACK_CHANNEL_URL}/p1730284800000200`,
 };
 
 const pitchRows: PitchRow[] = [
@@ -570,8 +579,10 @@ export function getPitches(): Promise<PitchesResponse> {
         interestedByMe: interested.includes(user.sub),
         organizedByMe: organizerSub === user.sub,
         organizer: { name: personFor(organizerSub).name },
+        slackUrl: slackThreads[row.pitchId] ?? "",
       };
     }),
+    slackChannelUrl: SLACK_CHANNEL_URL,
   });
 }
 

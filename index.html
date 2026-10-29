@@ -750,6 +750,15 @@
           </p>
           <a class="button-accent" href="%BASE_URL%pitch">Pitch an n8ncation</a>
         </div>
+        <!-- The link comes from GET /pitches (slackChannelUrl), so it only
+             shows once that call has succeeded and the variable is set. -->
+        <p class="polls-intro pitches-slack" data-pitches-slack hidden>
+          Talk trips through in
+          <a target="_blank" rel="noopener noreferrer"
+            >#mission-n8n-workations</a
+          >
+          on Slack. Every new pitch gets its own thread there.
+        </p>
         <div class="pitch-grid" data-pitches>
           <p class="trip-state" data-pitches-state role="status">
             Loading pitches…
@@ -824,6 +833,14 @@
             <div data-fact="organizer">
               <dt>Pitched by</dt>
               <dd></dd>
+            </div>
+            <div data-fact="slack">
+              <dt>Discussion</dt>
+              <dd>
+                <a target="_blank" rel="noopener noreferrer"
+                  >Open the Slack thread</a
+                >
+              </dd>
             </div>
           </dl>
           <div class="pitch-progress">

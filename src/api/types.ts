@@ -159,10 +159,18 @@ export interface Pitch {
   organizedByMe: boolean;
   /** Who pitched it. Display fields only, as for a trip's organizer. */
   organizer: Organizer | null;
+  /** Link to the pitch's discussion thread in the team's Slack channel, or
+      "" when it has none (pitched before the Slack bot, or the post failed).
+      Set by the "Slack notify" workflow when the pitch is announced. */
+  slackUrl: string;
 }
 
 export interface PitchesResponse {
   pitches: Pitch[];
+  /** Link to the Slack channel where trips are discussed, from the n8n
+      variable SLACK_CHANNEL_URL. Sent with the pitches rather than baked
+      into index.html, so it only reaches signed-in colleagues. "" if unset. */
+  slackChannelUrl: string;
 }
 
 /** Body of POST /pitch. The caller becomes the organizer, taken from the
