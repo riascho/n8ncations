@@ -4,9 +4,12 @@
    - /workations (also served at /pitches): one card per open pitch in the
      "Coming up" grid, next to the confirmed trips, with an "I'm
      interested" toggle and progress towards the pitch's threshold. main.ts
-     loads the data and merges the cards. The organizer's own card can also
-     be edited or cancelled. A cancelled pitch stays listed, with the
-     organizer's reason, until its deadline.
+     loads the data and merges the cards. A cancelled pitch stays listed,
+     with the organizer's reason, until its deadline.
+   - /pitches/<pitchId>: the pitch's own page, linked from its card's
+     title. It reuses the trip page's markup and adds cost, group size,
+     accommodation, the Slack thread, interest, and for the organizer the
+     edit link and cancelling.
    - /pitch: the form to submit one. The person pitching becomes the
      organizer and counts as the first interested person.
    - /pitch?edit=<pitchId>: the same form, filled in, for the organizer.
@@ -31,7 +34,7 @@ import {
 import { requireEl, template } from "../dom";
 import type { ListedCard } from "../dom";
 import { euros, httpsUrl, safeUrl } from "../format";
-import { appPath } from "../paths";
+import { appPath, currentAppPath } from "../paths";
 import { picksSummary } from "../poll-picks";
 
 /* Limits shared with the validation in the /pitch, /pitch-update and
@@ -67,14 +70,30 @@ function describe(error: unknown, fallback: string): string {
   return fallback;
 }
 
-/** The organizer's edit form for one pitch, linked from its card and /me. */
+/** The organizer's edit form for one pitch, linked from its page and /me. */
 function editPath(pitchId: string): string {
   return `${appPath("/pitch")}?${new URLSearchParams({ edit: pitchId })}`;
 }
 
+/** A pitch's own page, linked from its card's title. The "/pitches/" prefix
+    also appears in the inline script in index.html that picks the view. */
+function pitchPath(pitchId: string): string {
+  return appPath(`/pitches/${encodeURIComponent(pitchId)}`);
+}
+
 /* ----------------------------------------------------------------
-   Cards, /workations
+   Interest and cancelling: shared by the cards on /workations and a
+   pitch's own page. Only the page has the organizer's controls.
    ---------------------------------------------------------------- */
+
+/** The organizer's edit link, "Cancel pitch" button and cancel form. */
+interface OwnerControls {
+  owner: HTMLElement;
+  cancelOpen: HTMLButtonElement;
+  cancelForm: HTMLFormElement;
+  reasonField: HTMLTextAreaElement;
+  cancelSubmit: HTMLButtonElement;
+}
 
 interface PitchView {
   root: HTMLElement;
@@ -83,17 +102,13 @@ interface PitchView {
   progressBox: HTMLElement;
   progress: HTMLElement;
   bar: HTMLElement;
-  /** "Closes 15 December 2026 · €650 per person". */
+  /** "Closes 15 December 2026". */
   meta: HTMLElement;
   button: HTMLButtonElement;
   cancelled: HTMLElement;
   reason: HTMLElement;
-  /** The organizer's edit link and "Cancel pitch" button. */
-  owner: HTMLElement;
-  cancelOpen: HTMLButtonElement;
-  cancelForm: HTMLFormElement;
-  reasonField: HTMLTextAreaElement;
-  cancelSubmit: HTMLButtonElement;
+  /** On the pitch's page only; null on a card. */
+  controls: OwnerControls | null;
   status: HTMLElement;
   pitch: Pitch;
   busy: boolean;
@@ -108,15 +123,11 @@ function progressText(pitch: Pitch): string {
   return `${pitch.interested} of ${pitch.threshold} interested`;
 }
 
-/* The deadline and the cost, under the bar. The deadline lives here rather
-   than in the capsule: on /workations the capsule is what tells a pitch
-   apart from a confirmed trip. */
+/* The deadline, under the bar. It lives here rather than in the capsule: on
+   /workations the capsule is what tells a pitch apart from a confirmed trip.
+   The cost is one of the facts on the pitch's page. */
 function metaText(pitch: Pitch): string {
-  const parts = [`Closes ${formatDay(pitch.deadline)}`];
-  if (pitch.costEstimate !== null) {
-    parts.push(`${euros.format(pitch.costEstimate)} per person`);
-  }
-  return parts.join(" · ");
+  return `Closes ${formatDay(pitch.deadline)}`;
 }
 
 function renderPitch(v: PitchView): void {
@@ -132,10 +143,12 @@ function renderPitch(v: PitchView): void {
   v.reason.textContent = pitch.cancelReason;
   /* Only shown to the organizer. Hiding is a convenience, not the check:
      the workflows refuse an edit or cancel from anyone else. */
-  const canManage = pitch.organizedByMe && !cancelled;
-  v.owner.hidden = !canManage || v.confirming;
-  v.cancelForm.hidden = !canManage || !v.confirming;
-  v.cancelSubmit.disabled = v.busy;
+  if (v.controls) {
+    const canManage = pitch.organizedByMe && !cancelled;
+    v.controls.owner.hidden = !canManage || v.confirming;
+    v.controls.cancelForm.hidden = !canManage || !v.confirming;
+    v.controls.cancelSubmit.disabled = v.busy;
+  }
 
   v.progress.textContent = progressText(pitch);
   const share = Math.min(1, pitch.interested / Math.max(1, pitch.threshold));
@@ -187,13 +200,17 @@ async function toggleInterest(v: PitchView): Promise<void> {
 }
 
 async function cancelPitch(v: PitchView): Promise<void> {
-  if (v.busy) {
+  const controls = v.controls;
+  if (v.busy || !controls) {
     return;
   }
-  const reason = tidyParagraph(v.reasonField.value, PITCH_LIMITS.cancelReason);
+  const reason = tidyParagraph(
+    controls.reasonField.value,
+    PITCH_LIMITS.cancelReason,
+  );
   if (!reason) {
     v.status.textContent = "Say why you’re cancelling the pitch.";
-    v.reasonField.focus();
+    controls.reasonField.focus();
     return;
   }
 
@@ -242,6 +259,93 @@ function image(root: HTMLElement, selector: string): HTMLImageElement {
   return found;
 }
 
+/* The organizer's controls inside `scope`, wired to the view. Only the
+   pitch's own page has them. */
+function bindControls(scope: HTMLElement, view: PitchView): OwnerControls {
+  const pitch = view.pitch;
+  const cancelForm = requireEl(scope, ".pitch-cancel");
+  const reasonField = requireEl(cancelForm, "textarea");
+  if (
+    !(cancelForm instanceof HTMLFormElement) ||
+    !(reasonField instanceof HTMLTextAreaElement)
+  ) {
+    throw new Error("Expected the pitch cancel form and its reason field");
+  }
+  const reasonId = `pitch-${pitch.pitchId}-reason`;
+  reasonField.id = reasonId;
+  reasonField.maxLength = PITCH_LIMITS.cancelReason;
+  requireEl(cancelForm, "label").setAttribute("for", reasonId);
+
+  const owner = requireEl(scope, ".pitch-owner");
+  requireEl(owner, ".pitch-edit").setAttribute("href", editPath(pitch.pitchId));
+
+  const controls: OwnerControls = {
+    owner,
+    cancelOpen: button(owner, ".pitch-cancel-open"),
+    cancelForm,
+    reasonField,
+    cancelSubmit: button(cancelForm, "button[type=submit]"),
+  };
+  controls.cancelOpen.addEventListener("click", () => {
+    view.status.textContent = "";
+    view.confirming = true;
+    renderPitch(view);
+    reasonField.focus();
+  });
+  button(cancelForm, ".pitch-cancel-keep").addEventListener("click", () => {
+    view.status.textContent = "";
+    view.confirming = false;
+    renderPitch(view);
+    controls.cancelOpen.focus();
+  });
+  cancelForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    view.status.textContent = "";
+    void cancelPitch(view);
+  });
+  return controls;
+}
+
+/* Wires the progress, interest button and cancelled reason inside `scope`
+   (a card, or the pitch block on the pitch's page), plus the organizer's
+   controls when `withControls` is set. `state` is the status capsule. */
+function bindPitch(
+  scope: HTMLElement,
+  state: HTMLElement,
+  pitch: Pitch,
+  withControls: boolean,
+): PitchView {
+  const view: PitchView = {
+    root: scope,
+    state,
+    progressBox: requireEl(scope, ".pitch-progress"),
+    progress: requireEl(scope, ".pitch-progress-text"),
+    bar: requireEl(scope, ".pitch-bar"),
+    meta: requireEl(scope, ".pitch-meta"),
+    button: button(scope, ".pitch-button"),
+    cancelled: requireEl(scope, ".pitch-cancelled"),
+    reason: requireEl(scope, ".pitch-cancelled-reason"),
+    controls: null,
+    status: requireEl(scope, ".pitch-status"),
+    pitch,
+    busy: false,
+    confirming: false,
+  };
+  if (withControls) {
+    view.controls = bindControls(scope, view);
+  }
+  renderPitch(view);
+  view.button.addEventListener("click", () => {
+    view.status.textContent = "";
+    void toggleInterest(view);
+  });
+  return view;
+}
+
+/* ----------------------------------------------------------------
+   Cards, /workations
+   ---------------------------------------------------------------- */
+
 function buildPitchCard(pitch: Pitch): HTMLElement {
   const card = template("pitch-template");
 
@@ -269,34 +373,19 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
     photoBox.classList.add("listing-photo-empty");
   }
 
-  /* textContent throughout: every field was typed by whoever pitched it. */
-  heading.textContent = pitch.place;
+  /* textContent throughout: every field was typed by whoever pitched it.
+     The title links to the pitch's page, which holds the rest: cost,
+     group size, accommodation, the Slack thread and the organizer's
+     controls. */
+  const link = requireEl(heading, "a");
+  link.textContent = pitch.place;
+  link.setAttribute("href", pitchPath(pitch.pitchId));
   renderDateRange(
     requireEl(card, ".pitch-dates"),
     pitch.startDate,
     pitch.endDate,
   );
   requireEl(card, ".pitch-description").textContent = pitch.description;
-  requireEl(card, ".pitch-capacity").textContent =
-    pitch.capacity === null ? "No limit" : `Up to ${pitch.capacity}`;
-
-  const cost = requireEl(card, ".pitch-cost");
-  if (pitch.costEstimate !== null) {
-    cost.textContent = `${euros.format(pitch.costEstimate)} per person`;
-  } else {
-    cost.textContent = "Not estimated yet";
-  }
-  const includes = requireEl(card, ".pitch-includes");
-  includes.textContent = pitch.costIncludes;
-  includes.hidden = pitch.costIncludes === "";
-
-  const stay = requireEl(card, "[data-fact=stay]");
-  const href = pitch.accommodationUrl ? safeUrl(pitch.accommodationUrl) : null;
-  if (href) {
-    requireEl(stay, "a").setAttribute("href", href);
-  } else {
-    stay.remove();
-  }
 
   /* Who pitched it, as the card's eyebrow, where a trip card names its
      edition. */
@@ -308,75 +397,151 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
     organizer.remove();
   }
 
+  bindPitch(card, requireEl(card, ".pitch-state"), pitch, false);
+  return card;
+}
+
+/* ----------------------------------------------------------------
+   A pitch's own page, /pitches/<pitchId>
+
+   The same page as a trip's (the "detail" view and its markup in
+   index.html): main.ts mounts this instead of the trip page when the path
+   starts with /pitches/. The pitch comes from GET /pitches, matched by id
+   in the browser like a trip's slug: there is no single-pitch route.
+   ---------------------------------------------------------------- */
+
+/** Reads the id off /pitches/<pitchId>. */
+function pitchIdFromLocation(): string {
+  const path = /^\/pitches\/([^/?#]+)/.exec(currentAppPath());
+  if (!path?.[1]) {
+    return "";
+  }
+  try {
+    return decodeURIComponent(path[1]);
+  } catch {
+    /* A malformed escape — treat it as no id. */
+    return "";
+  }
+}
+
+/* Cost, group size, accommodation and the Slack thread, in the trip
+   page's facts list. The trip-only facts are left as they are (hidden). */
+function fillPitchFacts(root: HTMLElement, pitch: Pitch): void {
+  const facts = requireEl(root, "[data-detail-facts]");
+
+  requireEl(facts, "[data-detail-cost]").textContent =
+    pitch.costEstimate === null
+      ? "Not estimated yet"
+      : `${euros.format(pitch.costEstimate)} per person`;
+  const includes = requireEl(facts, "[data-detail-includes]");
+  includes.textContent = pitch.costIncludes;
+  includes.hidden = pitch.costIncludes === "";
+  requireEl(facts, "[data-detail-fact=cost]").hidden = false;
+
+  const capacity = requireEl(facts, "[data-detail-fact=capacity]");
+  requireEl(capacity, "dd").textContent =
+    pitch.capacity === null ? "No limit" : `Up to ${pitch.capacity}`;
+  capacity.hidden = false;
+
+  const stay = requireEl(facts, "[data-detail-fact=stay]");
+  const href = pitch.accommodationUrl ? safeUrl(pitch.accommodationUrl) : null;
+  if (href) {
+    requireEl(stay, "a").setAttribute("href", href);
+  }
+  stay.hidden = href === null;
+
   /* The pitch's thread in the Slack channel, posted when it was pitched.
      Pitches from before the Slack bot have none. */
-  const slack = requireEl(card, "[data-fact=slack]");
+  const slack = requireEl(facts, "[data-detail-fact=slack]");
   const threadUrl = pitch.slackUrl ? safeUrl(pitch.slackUrl) : null;
   if (threadUrl) {
     requireEl(slack, "a").setAttribute("href", threadUrl);
+  }
+  slack.hidden = threadUrl === null;
+
+  facts.hidden = false;
+}
+
+function fillPitchDetail(root: HTMLElement, pitch: Pitch): void {
+  document.title = `${pitch.place} (pitch) — n8ncation`;
+
+  /* textContent throughout: every field was typed by whoever pitched it. A
+     pitch has no title of its own, so the place is the heading, and the
+     place line under it goes. */
+  requireEl(root, "[data-detail-title]").textContent = pitch.place;
+  requireEl(root, "[data-detail-place]").hidden = true;
+  requireEl(root, "[data-detail-label]").textContent = pitch.place;
+  requireEl(root, "[data-detail-description]").textContent = pitch.description;
+  renderDateRange(
+    requireEl(root, "[data-detail-dates]"),
+    pitch.startDate,
+    pitch.endDate,
+  );
+
+  const organizer = requireEl(root, "[data-detail-organizer]");
+  const organizerName = pitch.organizer?.name.trim() ?? "";
+  organizer.textContent = organizerName ? `Pitched by ${organizerName}` : "";
+  organizer.hidden = organizerName === "";
+
+  fillPitchFacts(root, pitch);
+
+  /* Without a photo, or once its link breaks, the photo area shrinks to a
+     strip of dot grid, like the card's. */
+  const box = requireEl(root, ".detail-photo");
+  const photo = root.querySelector("[data-detail-photo]");
+  const photoUrl = pitch.imageUrl ? httpsUrl(pitch.imageUrl) : null;
+  if (photo instanceof HTMLImageElement && photoUrl) {
+    photo.referrerPolicy = "no-referrer";
+    photo.addEventListener("error", () => {
+      photo.remove();
+      box.classList.add("detail-photo-empty");
+    });
+    photo.src = photoUrl;
+    photo.alt = pitch.imageAlt;
   } else {
-    slack.remove();
+    photo?.remove();
+    box.classList.add("detail-photo-empty");
+  }
+}
+
+export async function mountPitchDetail(root: HTMLElement): Promise<void> {
+  const state = requireEl(document, "[data-detail-state]");
+  state.textContent = "Loading this pitch…";
+  const pitchId = pitchIdFromLocation();
+  if (!pitchId) {
+    state.textContent = "That link is missing a pitch.";
+    return;
   }
 
-  const cancelForm = requireEl(card, ".pitch-cancel");
-  const reasonField = requireEl(cancelForm, "textarea");
-  if (
-    !(cancelForm instanceof HTMLFormElement) ||
-    !(reasonField instanceof HTMLTextAreaElement)
-  ) {
-    throw new Error("Expected the pitch cancel form and its reason field");
+  let pitches: Pitch[];
+  try {
+    ({ pitches } = await api.getPitches());
+  } catch (error) {
+    state.textContent = describe(error, "This pitch could not be loaded.");
+    return;
   }
-  const reasonId = `pitch-${pitch.pitchId}-reason`;
-  reasonField.id = reasonId;
-  reasonField.maxLength = PITCH_LIMITS.cancelReason;
-  requireEl(cancelForm, "label").setAttribute("for", reasonId);
 
-  const owner = requireEl(card, ".pitch-owner");
-  requireEl(owner, ".pitch-edit").setAttribute("href", editPath(pitch.pitchId));
+  /* Only what /workations lists: open pitches, and cancelled ones until
+     their deadline. A pitch that went ahead is a trip now. */
+  const pitch = pitches.find((candidate) => candidate.pitchId === pitchId);
+  if (!pitch || !isListed(pitch)) {
+    state.textContent =
+      pitch?.status === "confirmed"
+        ? "This pitch went ahead. You’ll find the trip under Workations."
+        : "We could not find an open pitch at this address.";
+    return;
+  }
 
-  const view: PitchView = {
-    root: card,
-    state: requireEl(card, ".pitch-state"),
-    progressBox: requireEl(card, ".pitch-progress"),
-    progress: requireEl(card, ".pitch-progress-text"),
-    bar: requireEl(card, ".pitch-bar"),
-    meta: requireEl(card, ".pitch-meta"),
-    button: button(card, ".pitch-button"),
-    cancelled: requireEl(card, ".pitch-cancelled"),
-    reason: requireEl(card, ".pitch-cancelled-reason"),
-    owner,
-    cancelOpen: button(owner, ".pitch-cancel-open"),
-    cancelForm,
-    reasonField,
-    cancelSubmit: button(cancelForm, "button[type=submit]"),
-    status: requireEl(card, ".pitch-status"),
-    pitch,
-    busy: false,
-    confirming: false,
-  };
-  renderPitch(view);
-  view.button.addEventListener("click", () => {
-    view.status.textContent = "";
-    void toggleInterest(view);
-  });
-  view.cancelOpen.addEventListener("click", () => {
-    view.status.textContent = "";
-    view.confirming = true;
-    renderPitch(view);
-    reasonField.focus();
-  });
-  button(cancelForm, ".pitch-cancel-keep").addEventListener("click", () => {
-    view.status.textContent = "";
-    view.confirming = false;
-    renderPitch(view);
-    view.cancelOpen.focus();
-  });
-  cancelForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    view.status.textContent = "";
-    void cancelPitch(view);
-  });
-  return card;
+  fillPitchDetail(root, pitch);
+  /* The trip's RSVP block makes way for the pitch's interest block. */
+  requireEl(root, "[data-detail-rsvp]").hidden = true;
+  const block = requireEl(root, "[data-detail-pitch]");
+  block.hidden = false;
+  bindPitch(block, requireEl(root, "[data-detail-status-label]"), pitch, true);
+
+  state.textContent = "";
+  state.hidden = true;
+  root.hidden = false;
 }
 
 /** Open pitches first, then cancelled ones. Within each, deadline first:
@@ -802,7 +967,8 @@ async function submitPitch(v: FormView): Promise<void> {
       await api.createPitch(result);
       v.status.textContent = "Pitch submitted. Taking you to the list…";
     }
-    location.assign(appPath("/workations"));
+    /* An edit goes back to the pitch's page; a new pitch to the list. */
+    location.assign(editing ? pitchPath(editing) : appPath("/workations"));
   } catch (error) {
     v.busy = false;
     renderForm(v);
@@ -839,7 +1005,11 @@ function showEditTexts(root: HTMLElement, v: FormView): void {
   requireEl(root, "[data-pitch-title]").textContent = "Edit your pitch";
   requireEl(root, "[data-pitch-intro]").textContent =
     "Change anything about your pitch. Everyone who registered interest stays counted, so let them know about big changes such as new dates.";
-  requireEl(root, "[data-pitch-back]").textContent = "Discard changes";
+  const back = requireEl(root, "[data-pitch-back]");
+  back.textContent = "Discard changes";
+  if (v.editing) {
+    back.setAttribute("href", pitchPath(v.editing));
+  }
   v.submit.textContent = "Save changes";
 }
 

@@ -15,6 +15,7 @@ import {
 import { mountInvolved } from "./features/involved";
 import { mountLogistics, showLogistics } from "./features/logistics";
 import {
+  mountPitchDetail,
   mountPitchForm,
   pitchCards,
   renderMyPitches,
@@ -31,7 +32,7 @@ import {
 import * as api from "./api/client";
 import { ApiError } from "./api/types";
 import type { ListedCard } from "./dom";
-import { appPath } from "./paths";
+import { appPath, currentAppPath } from "./paths";
 import { picksSummary } from "./poll-picks";
 
 const { usingMock } = api;
@@ -474,6 +475,12 @@ function mountView(): void {
     const detail = el("[data-detail]");
     const logistics = el("[data-logistics]");
     const roster = el("[data-roster]");
+    /* A pitch's page is the same view and markup as a trip's: pitches.ts
+       fills it instead, and logistics are for trips only. */
+    if (detail && currentAppPath().startsWith("/pitches/")) {
+      void mountPitchDetail(detail);
+      return;
+    }
     if (detail && logistics && roster) {
       mountLogistics(logistics, roster);
       /* workations.ts owns the RSVP; logistics.ts reacts to it. They cannot

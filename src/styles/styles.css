@@ -612,13 +612,14 @@ li {
   letter-spacing: -0.01em;
 }
 
-/* body-xl */
+/* body-xl. A pitch's description keeps the line breaks it was typed with. */
 .detail-description {
   max-width: 640px;
   margin-top: var(--space-24);
   font-size: 18px;
   line-height: 22px;
   color: var(--type-secondary);
+  white-space: pre-line;
 }
 
 .detail-rsvp {
@@ -1991,18 +1992,24 @@ footer > span {
   color: var(--type-secondary);
 }
 
-/* heading-sm */
+/* heading-sm. The title links to the trip's or pitch's own page. */
 .listing-title {
   font-size: 28px;
   line-height: 32px;
+}
+
+.listing-title a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
 }
 
 .listing-dates {
   margin-top: var(--space-8);
 }
 
-/* body-lg, three lines at most. A pitch's full text is behind Details
-   (opening it lifts the clamp), a trip's on its trip page. */
+/* body-lg, three lines at most. The full text is on the trip's or pitch's
+   own page. */
 .listing-description {
   display: -webkit-box;
   margin-top: var(--space-16);
@@ -2014,12 +2021,6 @@ footer > span {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   line-clamp: 3;
-}
-
-.listing:has(.pitch-details[open]) .listing-description {
-  display: block;
-  -webkit-line-clamp: unset;
-  line-clamp: none;
 }
 
 /* Pinned to the bottom of the card, so bars and buttons line up across a
@@ -2075,42 +2076,37 @@ footer > span {
   display: inline-block;
 }
 
-/* Pitch details: the facts grid under a "Details" toggle. body-lg */
-.pitch-details summary {
-  display: inline-block;
-  font-size: 16px;
-  line-height: 20px;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  cursor: pointer;
+/* A pitch's page: the interest block in place of the trip's RSVP, with
+   the same divider and spacing. The organizer's controls follow. */
+.detail-pitch {
+  margin-top: var(--space-40);
+  padding-top: var(--space-32);
+  border-top: 1px solid var(--stroke-secondary);
 }
 
-.pitch-details summary::-webkit-details-marker {
+/* .detail-rsvp sets display: flex, which would otherwise beat [hidden] on
+   a pitch's page. */
+.detail-pitch[hidden],
+.detail-rsvp[hidden] {
   display: none;
 }
 
-/* Decoration: the empty alt text keeps the arrow out of what a screen
-   reader announces; <details> already says whether it is open. */
-.pitch-details summary::after {
-  content: " ▸" / "";
+.detail-pitch .listing-progress {
+  max-width: 392px;
+  padding-top: 0;
 }
 
-.pitch-details[open] summary::after {
-  content: " ▾" / "";
-}
-
-.pitch-details summary:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 4px;
-}
-
-/* Interest and Details share a row until Details opens below them. */
-.listing-actions .pitch-details {
-  flex-basis: auto;
-}
-
-.listing-actions .pitch-details[open] {
-  flex-basis: 100%;
+/* No photo on a pitch's page, or its link broke: a strip of dot grid in
+   place of the photo, like the cards. Two classes, so it beats the photo
+   height set in the media queries. */
+.detail-photo.detail-photo-empty {
+  height: var(--space-160);
+  background-color: var(--background-primary);
+  background-image: radial-gradient(
+    var(--dot-grid-primary) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
 }
 
 /* The pink band after the list. Core Black on Main Accent Pink, 8.29:1;

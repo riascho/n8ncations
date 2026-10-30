@@ -190,7 +190,10 @@ function buildListingCard(trip: Workation, first: boolean): HTMLElement {
 
   /* textContent throughout: operator-entered Data Table content. */
   requireEl(card, ".listing-eyebrow").textContent = trip.title;
-  heading.textContent = trip.place;
+  /* The title links to the trip page, like the button below it. */
+  const link = requireEl(heading, "a");
+  link.textContent = trip.place;
+  link.setAttribute("href", workationPath(trip));
   renderDateRange(
     requireEl(card, ".listing-dates"),
     trip.startDate,
@@ -602,22 +605,25 @@ async function toggleRsvp(v: DetailView): Promise<void> {
   }
 }
 
-/* Cost and accommodation, carried over from the pitch. Each fact is hidden
-   when it is empty, and the list with them when both are, so a hand-made
-   trip without either looks as it always did. */
+/* The same four facts as a pitch's page: estimated cost and group size
+   always (the cost says when there is no estimate), the accommodation and
+   the Slack thread when there is a link. Cost and accommodation are carried
+   over from the pitch; the thread is the pitch's own. */
 function fillFacts(root: HTMLElement, trip: Workation): void {
   const facts = requireEl(root, "[data-detail-facts]");
 
-  const cost = requireEl(facts, "[data-detail-fact=cost]");
-  const hasCost = trip.costEstimate !== null;
-  if (trip.costEstimate !== null) {
-    requireEl(cost, "[data-detail-cost]").textContent =
-      `${euros.format(trip.costEstimate)} per person`;
-    const includes = requireEl(cost, "[data-detail-includes]");
-    includes.textContent = trip.costIncludes;
-    includes.hidden = trip.costIncludes === "";
-  }
-  cost.hidden = !hasCost;
+  requireEl(facts, "[data-detail-cost]").textContent =
+    trip.costEstimate === null
+      ? "Not estimated yet"
+      : `${euros.format(trip.costEstimate)} per person`;
+  const includes = requireEl(facts, "[data-detail-includes]");
+  includes.textContent = trip.costIncludes;
+  includes.hidden = trip.costIncludes === "";
+
+  const capacity = requireEl(facts, "[data-detail-fact=capacity]");
+  requireEl(capacity, "dd").textContent =
+    trip.capacity === null ? "No limit" : `Up to ${trip.capacity}`;
+  capacity.hidden = false;
 
   const stay = requireEl(facts, "[data-detail-fact=stay]");
   const href = trip.accommodationUrl ? safeUrl(trip.accommodationUrl) : null;
@@ -626,7 +632,14 @@ function fillFacts(root: HTMLElement, trip: Workation): void {
   }
   stay.hidden = href === null;
 
-  facts.hidden = !hasCost && href === null;
+  const slack = requireEl(facts, "[data-detail-fact=slack]");
+  const threadUrl = trip.slackUrl ? safeUrl(trip.slackUrl) : null;
+  if (threadUrl) {
+    requireEl(slack, "a").setAttribute("href", threadUrl);
+  }
+  slack.hidden = threadUrl === null;
+
+  facts.hidden = false;
 }
 
 function fillDetail(root: HTMLElement, trip: Workation, past: boolean): void {

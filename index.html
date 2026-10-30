@@ -42,8 +42,8 @@
           }
         }
         /* Path (without a trailing slash) to view. Trips and pitches share
-           one page; /pitches stays as an alias because the Slack bot's
-           messages link to it. */
+           one page; /pitches stays as an alias because older Slack posts
+           link to it (newer ones link to /pitches/<pitchId>). */
         var views = {
           "/workations": "workations",
           "/vote": "vote",
@@ -52,9 +52,12 @@
           "/me": "me",
         };
         var key = path.length > 1 ? path.replace(/\/$/, "") : path;
+        /* A trip's page (/n8ncation/<slug>) and a pitch's page
+           (/pitches/<pitchId>) are the same "detail" view; src/main.ts
+           reads the path again to choose which one to fill. */
         document.documentElement.dataset.view = views.hasOwnProperty(key)
           ? views[key]
-          : path.startsWith("/n8ncation/")
+          : path.startsWith("/n8ncation/") || path.startsWith("/pitches/")
             ? "detail"
             : "home";
       })();
@@ -143,8 +146,13 @@
             <p class="dates" data-detail-dates></p>
           </div>
           <p class="detail-description" data-detail-description></p>
-          <!-- Carried over from the pitch the trip started as. Filled by
-               fillFacts() in src/features/workations.ts. -->
+          <!-- The same four facts on a trip's and a pitch's page: cost, group
+               size, accommodation and the Slack thread (the last two only
+               with a link). Filled by fillFacts() in
+               src/features/workations.ts on a trip, where cost and
+               accommodation come from the pitch it started as and the
+               thread is that pitch's, and by fillPitchFacts() in
+               src/features/pitches.ts on a pitch. -->
           <dl class="pitch-facts detail-facts" data-detail-facts hidden>
             <div data-detail-fact="cost">
               <dt>Estimated cost</dt>
@@ -153,10 +161,22 @@
                 <span class="pitch-includes" data-detail-includes></span>
               </dd>
             </div>
+            <div data-detail-fact="capacity" hidden>
+              <dt>Group size</dt>
+              <dd></dd>
+            </div>
             <div data-detail-fact="stay">
               <dt>Accommodation</dt>
               <dd>
                 <a target="_blank" rel="noopener noreferrer">See the place</a>
+              </dd>
+            </div>
+            <div data-detail-fact="slack" hidden>
+              <dt>Discussion</dt>
+              <dd>
+                <a target="_blank" rel="noopener noreferrer"
+                  >Open the Slack thread</a
+                >
               </dd>
             </div>
           </dl>
@@ -174,6 +194,64 @@
               data-detail-rsvp-status
               role="status"
             ></p>
+          </div>
+          <!-- A pitch's page only, in place of the RSVP block: progress
+               towards the threshold, the interest button, a cancelled
+               pitch's reason, and for the organizer the edit link and
+               cancelling. Wired by mountPitchDetail() in
+               src/features/pitches.ts. -->
+          <div class="detail-pitch" data-detail-pitch hidden>
+            <div class="listing-progress pitch-progress">
+              <span class="card-track" aria-hidden="true"
+                ><span class="card-bar pitch-bar"></span
+              ></span>
+              <p
+                class="listing-progress-text pitch-progress-text"
+                role="status"
+              ></p>
+            </div>
+            <p class="listing-meta pitch-meta"></p>
+            <div class="pitch-cancelled" hidden>
+              <p class="pitch-cancelled-label">Cancelled by the organizer</p>
+              <p class="pitch-cancelled-reason"></p>
+            </div>
+            <div class="listing-actions">
+              <button
+                class="pitch-button"
+                type="button"
+                aria-pressed="false"
+              ></button>
+            </div>
+            <div class="pitch-owner" hidden>
+              <a class="auth-button auth-button-quiet pitch-edit">Edit pitch</a>
+              <button
+                class="auth-button auth-button-quiet pitch-cancel-open"
+                type="button"
+              >
+                Cancel pitch
+              </button>
+            </div>
+            <form class="pitch-cancel" hidden>
+              <div class="field">
+                <label class="field-label">Why are you cancelling?</label>
+                <textarea name="reason" rows="3" required></textarea>
+                <p class="field-hint">
+                  Everyone sees this on the pitch until the interest deadline.
+                </p>
+              </div>
+              <div class="form-actions">
+                <button
+                  class="auth-button auth-button-quiet pitch-cancel-keep"
+                  type="button"
+                >
+                  Keep pitch
+                </button>
+                <button class="button-accent" type="submit">
+                  Cancel pitch
+                </button>
+              </div>
+            </form>
+            <p class="pitch-status" role="status"></p>
           </div>
           <!-- Shown once you have a spot or a waitlist place, until the trip
                ends. Wired by src/features/logistics.ts. -->
@@ -817,8 +895,9 @@
            card shape (.listing), and differ in fill and border
            (.listing-trip is solid, .listing-pitch dashed on grey). The photo
            area always shows, with a dot grid when there is no photo, and
-           carries the status capsule. The bars are decoration: the text
-           under each says the same thing. -->
+           carries the status capsule. The title links to the trip's or
+           pitch's own page. The bars are decoration: the text under each
+           says the same thing. -->
       <template id="listing-trip-template">
         <article class="listing listing-trip">
           <div class="listing-photo">
@@ -832,7 +911,7 @@
           </div>
           <div class="listing-body">
             <p class="listing-eyebrow"></p>
-            <h3 class="listing-title"></h3>
+            <h3 class="listing-title"><a></a></h3>
             <p class="dates listing-dates"></p>
             <p class="listing-description"></p>
             <div class="listing-progress">
@@ -851,10 +930,9 @@
       <!-- One card per pitch in "Coming up", filled from GET /pitches. The
            status capsule says "Pitch" or "Cancelled". A cancelled pitch swaps
            the progress, meta line and button for the organizer's reason.
-           Cost, group size, accommodation and the Slack thread sit under
-           Details. The organizer's own card gets the edit and cancel
-           controls; the cancel form's label ids are set per card in
-           pitches.ts. -->
+           Cost, group size, accommodation, the Slack thread and the
+           organizer's edit and cancel controls are on the pitch's own page,
+           /pitches/<pitchId>, which the title links to. -->
       <template id="pitch-template">
         <article class="listing listing-pitch pitch">
           <div class="listing-photo pitch-photo">
@@ -869,7 +947,7 @@
           </div>
           <div class="listing-body">
             <p class="listing-eyebrow pitch-organizer"></p>
-            <h3 class="listing-title pitch-place"></h3>
+            <h3 class="listing-title pitch-place"><a></a></h3>
             <p class="dates listing-dates pitch-dates"></p>
             <p class="listing-description pitch-description"></p>
             <div class="listing-progress pitch-progress">
@@ -892,68 +970,7 @@
                 type="button"
                 aria-pressed="false"
               ></button>
-              <details class="pitch-details">
-                <summary>Details</summary>
-                <dl class="pitch-facts">
-                  <div>
-                    <dt>Estimated cost</dt>
-                    <dd>
-                      <span class="pitch-cost"></span>
-                      <span class="pitch-includes"></span>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Group size</dt>
-                    <dd class="pitch-capacity"></dd>
-                  </div>
-                  <div data-fact="stay">
-                    <dt>Accommodation</dt>
-                    <dd>
-                      <a target="_blank" rel="noopener noreferrer"
-                        >See the place</a
-                      >
-                    </dd>
-                  </div>
-                  <div data-fact="slack">
-                    <dt>Discussion</dt>
-                    <dd>
-                      <a target="_blank" rel="noopener noreferrer"
-                        >Open the Slack thread</a
-                      >
-                    </dd>
-                  </div>
-                </dl>
-              </details>
             </div>
-            <div class="pitch-owner" hidden>
-              <a class="auth-button auth-button-quiet pitch-edit">Edit pitch</a>
-              <button
-                class="auth-button auth-button-quiet pitch-cancel-open"
-                type="button"
-              >
-                Cancel pitch
-              </button>
-            </div>
-            <form class="pitch-cancel" hidden>
-              <div class="field">
-                <label class="field-label">Why are you cancelling?</label>
-                <textarea name="reason" rows="3" required></textarea>
-                <p class="field-hint">
-                  Everyone sees this on the card until the interest deadline.
-                </p>
-              </div>
-              <div class="form-actions">
-                <button
-                  class="auth-button auth-button-quiet pitch-cancel-keep"
-                  type="button"
-                >
-                  Keep pitch
-                </button>
-                <button class="button-accent" type="submit">
-                  Cancel pitch
-                </button>
-              </div>
-            </form>
             <p class="pitch-status" role="status"></p>
           </div>
         </article>

@@ -43,6 +43,10 @@ export interface Workation {
   costEstimate: number | null;
   /** What the estimate covers, or "" when not given. */
   costIncludes: string;
+  /** Link to the Slack thread of the pitch the trip started as, or "" when
+      it has none (made by hand, or pitched before the Slack bot). GET
+      /workations finds the pitch whose `workation_id` is this trip's. */
+  slackUrl: string;
   /** How many people have a confirmed spot. Counts only, never who. */
   attendees: number;
   /** Spots on the trip, or null when there is no limit. */

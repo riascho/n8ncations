@@ -105,7 +105,7 @@ function personFor(sub: string): Person {
    attendee list on that trip's page. */
 type WorkationRow = Omit<
   Workation,
-  "attendees" | "waitlisted" | "organizer"
+  "attendees" | "waitlisted" | "organizer" | "slackUrl"
 > & {
   organizerSub: string | null;
 };
@@ -257,11 +257,20 @@ type PitchRow = Omit<
 
 /* Stand-ins for the Slack links the workflows send. Porto and Lake Bled have
    a discussion thread; the others show the card without one, like a pitch
-   from before the Slack bot. */
+   from before the Slack bot. The confirmed p-00 has one too, which its trip
+   (Roche) shows. */
 const SLACK_CHANNEL_URL = "https://example.slack.com/archives/C0MOCK";
 const slackThreads: Record<string, string> = {
   "p-01": `${SLACK_CHANNEL_URL}/p1730198400000100`,
   "p-03": `${SLACK_CHANNEL_URL}/p1730284800000200`,
+  "p-00": `${SLACK_CHANNEL_URL}/p1725000000000300`,
+};
+
+/* Stands in for the `workation_id` a confirmed pitch carries: which pitch
+   each trip started as. GET /workations follows it to the pitch's Slack
+   thread. Lapland and Lisbon were made by hand. */
+const pitchOfTrip: Record<string, string> = {
+  "01": "p-00",
 };
 
 const pitchRows: PitchRow[] = [
@@ -441,6 +450,8 @@ export function getWorkations(): Promise<WorkationsResponse> {
         (signup) => signup.status === "waitlist",
       ).length,
       organizer: organizerSub ? { name: personFor(organizerSub).name } : null,
+      /* Like the workflow: the thread of the pitch the trip started as. */
+      slackUrl: slackThreads[pitchOfTrip[row.workationId] ?? ""] ?? "",
     })),
   });
 }
