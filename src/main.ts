@@ -227,7 +227,8 @@ function showCount(selector: string, text: string): void {
    each other, so the responses are fetched here, in parallel, and each
    module only builds its own cards. One failing still shows the other's
    cards, with a line saying what is missing. GET /polls only feeds the
-   band's "most votes so far" line. */
+   band's "most votes so far" line, and GET /me the RSVP buttons on the
+   trip cards. */
 async function loadComingUp(): Promise<void> {
   const grid = el("[data-coming-up]");
   const past = el("[data-past]");
@@ -239,10 +240,13 @@ async function loadComingUp(): Promise<void> {
     return;
   }
 
-  const [trips, pitches, polls] = await Promise.allSettled([
+  /* GET /me only says where the reader stands on each trip, for the RSVP
+     buttons on the trip cards; without it those buttons are left out. */
+  const [trips, pitches, polls, me] = await Promise.allSettled([
     api.getWorkations(),
     api.getPitches(),
     api.getPolls(),
+    api.getMe(),
   ]);
   const describe = (error: unknown, fallback: string): string =>
     error instanceof ApiError ? error.message : fallback;
@@ -267,7 +271,10 @@ async function loadComingUp(): Promise<void> {
   const cards: ListedCard[] = [];
   const missing: HTMLElement[] = [];
   if (trips.status === "fulfilled") {
-    const tripCards = upcomingTripCards(trips.value.workations);
+    const tripCards = upcomingTripCards(
+      trips.value.workations,
+      me.status === "fulfilled" ? me.value : null,
+    );
     cards.push(...tripCards);
     showCount(
       "[data-steps-confirmed]",

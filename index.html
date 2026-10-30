@@ -921,9 +921,17 @@
               <p class="listing-progress-text"></p>
             </div>
             <p class="listing-meta"></p>
+            <!-- RSVP right on the card, with the same toggle as the trip
+                 page: "Count me in", "You're going", "Join the waitlist" or
+                 your waitlist place. Left out when GET /me failed. -->
             <div class="listing-actions">
-              <a class="auth-button listing-open">See trip and RSVP</a>
+              <button
+                class="listing-rsvp"
+                type="button"
+                aria-pressed="false"
+              ></button>
             </div>
+            <p class="listing-rsvp-status" role="status"></p>
           </div>
         </article>
       </template>

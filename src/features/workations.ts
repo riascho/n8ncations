@@ -14,7 +14,7 @@
 
 import * as api from "../api/client";
 import { ApiError } from "../api/types";
-import type { SignupStatus, WaitlistEntry, Workation } from "../api/types";
+import type { Me, SignupStatus, WaitlistEntry, Workation } from "../api/types";
 import { isSignedIn } from "../auth";
 import { requireEl, template } from "../dom";
 import type { ListedCard } from "../dom";
@@ -157,8 +157,15 @@ function spotsText(trip: Workation): string {
 
 /* A confirmed trip in "Coming up". Same shape as a pitch card (.listing),
    but solid-bordered with a pink "Confirmed" capsule: this one is booked.
-   RSVP lives on the trip page, which the button opens. */
-function buildListingCard(trip: Workation, first: boolean): HTMLElement {
+   The title opens the trip page; the button RSVPs right here, with the same
+   toggle as the trip page, and shows where you stand. `me` is the reader's
+   GET /me, or null when it failed: without it the button can't say whether
+   you're going, so it is left out. */
+function buildListingCard(
+  trip: Workation,
+  first: boolean,
+  me: Me | null,
+): HTMLElement {
   const card = template("listing-trip-template");
 
   const titleId = `trip-${trip.workationId}-title`;
@@ -190,7 +197,7 @@ function buildListingCard(trip: Workation, first: boolean): HTMLElement {
 
   /* textContent throughout: operator-entered Data Table content. */
   requireEl(card, ".listing-eyebrow").textContent = trip.title;
-  /* The title links to the trip page, like the button below it. */
+  /* The title links to the trip page. */
   const link = requireEl(heading, "a");
   link.textContent = trip.place;
   link.setAttribute("href", workationPath(trip));
@@ -202,24 +209,56 @@ function buildListingCard(trip: Workation, first: boolean): HTMLElement {
   requireEl(card, ".listing-description").textContent = trip.description;
 
   /* Without a capacity there is nothing to fill, so no bar, just the count. */
-  const track = requireEl(card, ".card-track");
-  if (trip.capacity !== null) {
-    const share = Math.min(1, trip.attendees / Math.max(1, trip.capacity));
-    requireEl(card, ".card-bar").style.setProperty(
-      "--pct",
-      `${Math.round(share * 100)}%`,
-    );
-  } else {
-    track.remove();
+  if (trip.capacity === null) {
+    requireEl(card, ".card-track").remove();
   }
-  requireEl(card, ".listing-progress-text").textContent = spotsText(trip);
-
+  const bar = card.querySelector<HTMLElement>(".card-bar");
+  const progress = requireEl(card, ".listing-progress-text");
   const meta = requireEl(card, ".listing-meta");
-  meta.textContent =
-    trip.waitlisted > 0 ? `${trip.waitlisted} on the waitlist` : "";
-  meta.hidden = trip.waitlisted === 0;
+  /* Repainted after every RSVP, which moves the counts. */
+  const renderCounts = (): void => {
+    if (bar && trip.capacity !== null) {
+      const share = Math.min(1, trip.attendees / Math.max(1, trip.capacity));
+      bar.style.setProperty("--pct", `${Math.round(share * 100)}%`);
+    }
+    progress.textContent = spotsText(trip);
+    meta.textContent =
+      trip.waitlisted > 0 ? `${trip.waitlisted} on the waitlist` : "";
+    meta.hidden = trip.waitlisted === 0;
+  };
+  renderCounts();
 
-  requireEl(card, ".listing-open").setAttribute("href", workationPath(trip));
+  const button = card.querySelector(".listing-rsvp");
+  const status = requireEl(card, ".listing-rsvp-status");
+  if (!(button instanceof HTMLButtonElement)) {
+    throw new Error("Expected the card's RSVP button");
+  }
+  if (!me) {
+    button.remove();
+    return card;
+  }
+
+  const id = trip.workationId;
+  const waiting = me.waitlist.find((entry) => entry.workationId === id);
+  const view: DetailView = {
+    root: card,
+    renderCounts,
+    button,
+    status,
+    trip,
+    signup: me.signups.includes(id) ? "going" : waiting ? "waitlist" : null,
+    position: waiting?.position ?? null,
+    organizing: me.organizing.includes(id),
+    busy: false,
+    edits: 0,
+    /* Nothing else on /workations reacts to an RSVP. */
+    onChange: () => {},
+  };
+  renderRsvp(view);
+  button.addEventListener("click", () => {
+    status.textContent = "";
+    void toggleRsvp(view);
+  });
   return card;
 }
 
@@ -333,13 +372,17 @@ function renderCarousel(
    "Coming up" grid also holds the pitches, which this module cannot load.
    ---------------------------------------------------------------- */
 
-/** One card per trip that hasn't ended, for the "Coming up" grid. */
-export function upcomingTripCards(workations: Workation[]): ListedCard[] {
+/** One card per trip that hasn't ended, for the "Coming up" grid. `me`
+    sets each card's RSVP button; null leaves the buttons out. */
+export function upcomingTripCards(
+  workations: Workation[],
+  me: Me | null,
+): ListedCard[] {
   return workations
     .filter((trip) => !isPast(trip))
     .sort((a, b) => byDate(a, b, true))
     .map((trip, index) => ({
-      card: buildListingCard(trip, index === 0),
+      card: buildListingCard(trip, index === 0, me),
       startDate: trip.startDate,
       last: false,
     }));
@@ -468,9 +511,12 @@ export interface DetailState {
 
 export type DetailListener = (state: DetailState) => void;
 
+/* One RSVP control: the trip page's, or a confirmed trip's card in "Coming
+   up" on /workations. Both share the toggle below; each repaints its own
+   counts (the attendee line on the page, the spots bar on a card). */
 interface DetailView {
   root: HTMLElement;
-  attendees: HTMLElement;
+  renderCounts: () => void;
   button: HTMLButtonElement;
   status: HTMLElement;
   trip: Workation;
@@ -511,7 +557,7 @@ function buttonText(v: DetailView): string {
 }
 
 function renderRsvp(v: DetailView): void {
-  v.attendees.textContent = attendeeText(v.trip);
+  v.renderCounts();
   v.button.setAttribute("aria-pressed", v.signup ? "true" : "false");
   v.button.textContent = buttonText(v);
   v.button.disabled = v.busy;
@@ -761,7 +807,9 @@ export async function mountWorkationDetail(
 
   const view: DetailView = {
     root: rsvp,
-    attendees,
+    renderCounts: () => {
+      attendees.textContent = attendeeText(trip);
+    },
     button,
     status,
     trip,

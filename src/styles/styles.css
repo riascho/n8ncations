@@ -2071,11 +2071,6 @@ footer > span {
   margin-top: var(--space-24);
 }
 
-/* A link styled as the grey .auth-button pill. */
-.listing-open {
-  display: inline-block;
-}
-
 /* A pitch's page: the interest block in place of the trip's RSVP, with
    the same divider and spacing. The organizer's controls follow. */
 .detail-pitch {
@@ -2264,8 +2259,10 @@ footer > span {
 }
 
 /* The RSVP button's colours and states at the body-lg step: a card holds
-   several of these, the trip page only one. */
-.pitch-button {
+   several of these, the trip page only one. Pitch interest and the RSVP on
+   a confirmed trip's card share it: pink to act, grey once you're in. */
+.pitch-button,
+.listing-rsvp {
   padding: var(--space-12) var(--space-24);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -2278,46 +2275,57 @@ footer > span {
   cursor: pointer;
 }
 
-.pitch-button:hover {
+.pitch-button:hover,
+.listing-rsvp:hover {
   background: var(--interactive-accent-hover);
 }
 
-.pitch-button:active {
+.pitch-button:active,
+.listing-rsvp:active {
   background: var(--interactive-accent-pressed);
 }
 
-.pitch-button:focus-visible {
+.pitch-button:focus-visible,
+.listing-rsvp:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-.pitch-button[aria-pressed="true"] {
+.pitch-button[aria-pressed="true"],
+.listing-rsvp[aria-pressed="true"] {
   border-color: var(--stroke-primary);
   background: var(--interactive-primary-default);
 }
 
-.pitch-button[aria-pressed="true"]:hover {
+.pitch-button[aria-pressed="true"]:hover,
+.listing-rsvp[aria-pressed="true"]:hover {
   background: var(--interactive-primary-hover);
 }
 
-.pitch.is-busy .pitch-button {
+/* Locked while the write is in flight. renderPitch() and renderRsvp() set
+   .is-busy on the card or the pitch page's block. */
+.is-busy .pitch-button,
+.is-busy .listing-rsvp {
   opacity: 0.6;
   cursor: progress;
 }
 
 /* body-md */
-.pitch-status {
+.pitch-status,
+.listing-rsvp-status {
   font-size: 14px;
   line-height: 18px;
   color: var(--type-primary);
 }
 
-.pitch-status:empty {
+.pitch-status:empty,
+.listing-rsvp-status:empty {
   height: 0;
   overflow: hidden;
 }
 
-.pitch-status:not(:empty) {
+.pitch-status:not(:empty),
+.listing-rsvp-status:not(:empty) {
   margin-top: var(--space-8);
 }
 
