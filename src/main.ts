@@ -12,21 +12,25 @@ import {
   signOut,
   takeReturnPath,
 } from "./auth";
+import { mountInvolved } from "./features/involved";
 import { mountLogistics, showLogistics } from "./features/logistics";
 import {
   mountPitchForm,
-  mountPitches,
+  pitchCards,
   renderMyPitches,
+  showSlackChannel,
 } from "./features/pitches";
 import { mountPolls } from "./features/polls";
 import { clearProfile, mountProfile, showProfile } from "./features/profile";
 import {
   mountWorkationDetail,
-  mountWorkations,
   renderMyWorkations,
+  renderPastTrips,
+  upcomingTripCards,
 } from "./features/workations";
 import * as api from "./api/client";
 import { ApiError } from "./api/types";
+import type { ListedCard } from "./dom";
 import { appPath } from "./paths";
 
 const { usingMock } = api;
@@ -185,6 +189,86 @@ async function loadMyPitches(): Promise<void> {
   section.hidden = false;
 }
 
+/* Soonest first, by start date. YYYY-MM-DD strings sort as dates. Cancelled
+   pitches go after everything else. */
+function byStart(a: ListedCard, b: ListedCard): number {
+  if (a.last !== b.last) {
+    return a.last ? 1 : -1;
+  }
+  return a.startDate.localeCompare(b.startDate);
+}
+
+function stateLine(message: string): HTMLElement {
+  const line = document.createElement("p");
+  line.className = "trip-state";
+  line.textContent = message;
+  return line;
+}
+
+/* /workations: confirmed trips and open pitches in one "Coming up" grid,
+   then past trips. The cards come from workations.ts and pitches.ts, which
+   cannot import each other, so both responses are fetched here, in
+   parallel, and each module only builds its own cards. One failing still
+   shows the other's cards, with a line saying what is missing. */
+async function loadComingUp(): Promise<void> {
+  const grid = el("[data-coming-up]");
+  const past = el("[data-past]");
+  const pastCount = el("[data-past-count]");
+  const pastSection = past?.closest("section");
+  const slack = el("[data-pitches-slack]");
+  if (!grid || !past || !pastCount || !pastSection || !slack) {
+    return;
+  }
+
+  const [trips, pitches] = await Promise.allSettled([
+    api.getWorkations(),
+    api.getPitches(),
+  ]);
+  const describe = (error: unknown, fallback: string): string =>
+    error instanceof ApiError ? error.message : fallback;
+
+  if (trips.status === "rejected" && pitches.status === "rejected") {
+    grid.replaceChildren(
+      stateLine(describe(trips.reason, "The n8ncations could not be loaded.")),
+    );
+    return;
+  }
+
+  const cards: ListedCard[] = [];
+  const missing: HTMLElement[] = [];
+  if (trips.status === "fulfilled") {
+    cards.push(...upcomingTripCards(trips.value.workations));
+    renderPastTrips(past, pastCount, trips.value.workations);
+    pastSection.hidden = false;
+  } else {
+    missing.push(
+      stateLine(
+        describe(trips.reason, "The confirmed trips could not be loaded."),
+      ),
+    );
+  }
+  if (pitches.status === "fulfilled") {
+    cards.push(...pitchCards(pitches.value.pitches));
+    showSlackChannel(slack, pitches.value.slackChannelUrl);
+  } else {
+    missing.push(
+      stateLine(describe(pitches.reason, "The pitches could not be loaded.")),
+    );
+  }
+
+  grid.replaceChildren(...missing);
+  if (cards.length === 0 && missing.length === 0) {
+    grid.appendChild(
+      stateLine(
+        "Nothing coming up yet. Pitch a trip, or vote on where we go next.",
+      ),
+    );
+  }
+  for (const { card } of cards.sort(byStart)) {
+    grid.appendChild(card);
+  }
+}
+
 function renderAuth(): void {
   const slot = el("[data-auth]");
   if (!slot) {
@@ -252,7 +336,7 @@ function renderAuth(): void {
    mark the section they belong to: aria-current="true" rather than "page". */
 const NAV_PARENT: Record<string, string> = {
   detail: "workations",
-  pitch: "pitches",
+  pitch: "workations",
 };
 
 function markNav(): void {
@@ -377,12 +461,7 @@ function mountView(): void {
 
   if (view === "workations") {
     document.title = "Workations — n8ncation";
-    const upcoming = el("[data-upcoming]");
-    const past = el("[data-past]");
-    const pastCount = el("[data-past-count]");
-    if (upcoming && past && pastCount) {
-      void mountWorkations(upcoming, past, pastCount);
-    }
+    void loadComingUp();
     return;
   }
 
@@ -396,15 +475,14 @@ function mountView(): void {
     return;
   }
 
-  if (view === "pitches") {
-    document.title = "Pitches — n8ncation";
-    const pitches = el("[data-pitches]");
-    if (pitches) {
-      void mountPitches(pitches);
+  /* Home: the intro and "What to expect" are public and load nothing. Signed
+     in, "Get involved" is added between them, and loads its numbers here. */
+  if (view === "home") {
+    const involved = el("[data-involved]");
+    if (involved) {
+      void mountInvolved(involved);
     }
   }
-
-  /* Home is the intro and "What to expect": public, with nothing to load. */
 }
 
 boot();

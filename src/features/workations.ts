@@ -1,5 +1,7 @@
 /* n8ncations: the preview cards on /workations and the full card behind
-   /n8ncation/<slug>, which is where RSVP lives.
+   /n8ncation/<slug>, which is where RSVP lives. On /workations, confirmed
+   trips share the "Coming up" grid with the pitches: this module builds the
+   trip cards and main.ts merges them with the pitch cards from pitches.ts.
 
    Both views come from the same GET /workations payload. The detail page
    resolves its slug against that list client-side rather than asking for one
@@ -15,6 +17,7 @@ import { ApiError } from "../api/types";
 import type { SignupStatus, WaitlistEntry, Workation } from "../api/types";
 import { isSignedIn } from "../auth";
 import { requireEl, template } from "../dom";
+import type { ListedCard } from "../dom";
 import { euros, safeUrl } from "../format";
 import { appPath, assetPath, currentAppPath } from "../paths";
 import {
@@ -95,7 +98,8 @@ function byDate(a: Workation, b: Workation, ascending: boolean): number {
 }
 
 /* ----------------------------------------------------------------
-   Preview cards, /workations
+   Preview cards, /workations: confirmed trips in "Coming up", past
+   trips (.trip-compact) in their carousel
    ---------------------------------------------------------------- */
 
 function buildCard(
@@ -125,8 +129,8 @@ function buildCard(
       showPhoto(photo);
       photo.src = assetPath(trip.imageUrl);
       photo.alt = trip.imageAlt;
-      /* The first upcoming card is the largest image above the fold. Past
-         slides mostly start off-screen in their carousel. */
+      /* The first confirmed card is the likeliest image above the fold.
+         Past slides mostly start off-screen in their carousel. */
       if (!past && first) {
         photo.setAttribute("fetchpriority", "high");
       }
@@ -141,7 +145,13 @@ function buildCard(
   /* The photo label is a capsule, so it is mono ALL CAPS by stylesheet — the
      place name goes in as written. */
   requireEl(card, ".photo-label").textContent = trip.place;
-  requireEl(card, ".status").textContent = past ? "Past" : "Upcoming";
+  /* In "Coming up", the status is what sets a confirmed trip apart from the
+     pitches around it, so it takes the pink fill and the place label on the
+     photo steps down to grey (.trip-in-list): one pink capsule per card. */
+  const status = requireEl(card, ".status");
+  status.textContent = past ? "Past" : "Confirmed";
+  status.classList.toggle("capsule-accent", !past);
+  card.classList.toggle("trip-in-list", !past);
   requireEl(card, ".place").textContent = trip.place;
   requireEl(card, ".trip-description").textContent = trip.description;
   requireEl(card, ".trip-attendees").textContent = attendeeText(trip);
@@ -150,8 +160,35 @@ function buildCard(
   return card;
 }
 
+function buildEmptyState(upcoming: Workation[]): HTMLElement {
+  const empty = document.createElement("div");
+  empty.className = "empty";
+
+  const number = document.createElement("span");
+  number.className = "empty-number";
+  number.setAttribute("aria-hidden", "true");
+  number.textContent = "#—";
+
+  const copy = document.createElement("p");
+  copy.textContent = "No past n8ncations yet.";
+  copy.appendChild(document.createElement("br"));
+
+  /* Generated rather than written into the markup, so the line cannot go
+     stale once the first trip has been and gone. */
+  const next = document.createElement("span");
+  const first = upcoming[0];
+  const start = first ? parseDate(first.startDate) : null;
+  next.textContent = start
+    ? `Our first one is coming up in ${monthName(start.month)} ${start.year}.`
+    : "Our first one is still ahead.";
+  copy.appendChild(next);
+
+  empty.append(number, copy);
+  return empty;
+}
+
 /* ----------------------------------------------------------------
-   Carousel, /workations
+   Carousel, past trips on /workations
 
    A horizontally scrolling list with CSS scroll snapping, so touch,
    trackpad and keyboard scrolling work without any code. The buttons only
@@ -226,79 +263,35 @@ function renderCarousel(
   }
 }
 
-function buildEmptyState(upcoming: Workation[]): HTMLElement {
-  const empty = document.createElement("div");
-  empty.className = "empty";
+/* ----------------------------------------------------------------
+   Lists, /workations
 
-  const number = document.createElement("span");
-  number.className = "empty-number";
-  number.setAttribute("aria-hidden", "true");
-  number.textContent = "#—";
+   main.ts fetches GET /workations and hands the trips over, because the
+   "Coming up" grid also holds the pitches, which this module cannot load.
+   ---------------------------------------------------------------- */
 
-  const copy = document.createElement("p");
-  copy.textContent = "No past n8ncations yet.";
-  copy.appendChild(document.createElement("br"));
-
-  /* Generated rather than written into the markup, so the line cannot go
-     stale once the first trip has been and gone. */
-  const next = document.createElement("span");
-  const first = upcoming[0];
-  const start = first ? parseDate(first.startDate) : null;
-  next.textContent = start
-    ? `Our first one is coming up in ${monthName(start.month)} ${start.year}.`
-    : "Our first one is still ahead.";
-  copy.appendChild(next);
-
-  empty.append(number, copy);
-  return empty;
+/** One card per trip that hasn't ended, for the "Coming up" grid. */
+export function upcomingTripCards(workations: Workation[]): ListedCard[] {
+  return workations
+    .filter((trip) => !isPast(trip))
+    .sort((a, b) => byDate(a, b, true))
+    .map((trip, index) => ({
+      card: buildCard(trip, false, index === 0),
+      startDate: trip.startDate,
+      last: false,
+    }));
 }
 
-export async function mountWorkations(
-  upcomingSlot: HTMLElement,
+/** The "Past n8ncations" carousel, most recent first, and its count. */
+export function renderPastTrips(
   pastSlot: HTMLElement,
   pastCount: HTMLElement,
-): Promise<void> {
-  const state = upcomingSlot.querySelector("[data-upcoming-state]");
-
-  let workations: Workation[];
-  try {
-    ({ workations } = await api.getWorkations());
-  } catch (error) {
-    if (state) {
-      state.textContent = describe(
-        error,
-        "The n8ncations could not be loaded.",
-      );
-    }
-    return;
-  }
-
+  workations: Workation[],
+): void {
   const upcoming = workations
     .filter((trip) => !isPast(trip))
     .sort((a, b) => byDate(a, b, true));
   const past = workations.filter(isPast).sort((a, b) => byDate(a, b, false));
-
-  upcomingSlot.replaceChildren();
-  if (upcoming.length === 0) {
-    const none = document.createElement("p");
-    none.className = "trip-state";
-    none.textContent =
-      "Nothing on the calendar right now. The polls under Vote decide the next one.";
-    upcomingSlot.appendChild(none);
-  } else {
-    renderCarousel(
-      upcomingSlot,
-      upcoming.map((trip, index) => buildCard(trip, false, index === 0)),
-      "upcoming",
-    );
-  }
-
-  /* The heading is written singular in the markup, which stops being true the
-     moment a second trip is booked. */
-  const heading = document.getElementById("upcoming-title");
-  if (heading && upcoming.length > 1) {
-    heading.textContent = "Upcoming n8ncations";
-  }
 
   pastSlot.replaceChildren();
   if (past.length === 0) {
@@ -586,7 +579,7 @@ function fillDetail(root: HTMLElement, trip: Workation, past: boolean): void {
   requireEl(root, "[data-detail-title]").textContent = trip.title;
   requireEl(root, "[data-detail-status-label]").textContent = past
     ? "Past"
-    : "Upcoming";
+    : "Confirmed";
   requireEl(root, "[data-detail-place]").textContent = trip.place;
   requireEl(root, "[data-detail-description]").textContent = trip.description;
   requireEl(root, "[data-detail-label]").textContent = trip.place;

@@ -114,9 +114,10 @@ src/
   main.ts               Boot: handles the sign-in return, sets data-session, renders the auth chip and banner, mounts the current view once signed in
   auth.ts               Google sign-in (popup + redirect fallback), session storage, JWT decoding for display
   dates.ts              Date parsing and display shared by trips, pitches and logistics
-  dom.ts                template() / requireEl() helpers
+  dom.ts                template() / requireEl() helpers, and the ListedCard shape for the merged /workations list
   format.ts             The euros formatter and link checks (safeUrl, https-only httpsUrl) shared by pitches and trips
   paths.ts              Base-path-aware app and asset URLs
+  poll-picks.ts         The most-voted places and months, for the hints on home and /pitch
   api/
     client.ts           The only module that talks to n8n; falls through to mock.ts when VITE_API_BASE is empty
     types.ts            The API contract (request/response shapes, ApiError)
@@ -124,9 +125,10 @@ src/
   data/
     polls.ts            Poll definitions (question, single/multi, seed options, suggestions on/off)
   features/
-    workations.ts       Trip carousels on /workations, the trip detail page + RSVP and waitlist, the "your trips" list on /me
+    involved.ts         "Get involved" on home: three cards (pitch your own trip, join a trip, vote with the top answers), with live counts
+    workations.ts       Confirmed trip cards and the past-trips carousel on /workations, the trip detail page + RSVP and waitlist, the "your trips" list on /me
     logistics.ts        On the trip page: your private logistics form, and the organizer's attendee list
-    pitches.ts          Pitch cards + interest on /pitches, the organizer's cancel, "your pitches" on /me, and the /pitch form (new or edit)
+    pitches.ts          Pitch cards + interest on /workations, the organizer's cancel, "your pitches" on /me, and the /pitch form (new or edit)
     polls.ts            Poll cards, voting, free-text suggestions
     profile.ts          The /me profile card (team, job title)
   styles/
@@ -134,25 +136,24 @@ src/
     styles.css          Component styles, using the tokens only
 ```
 
-**Views.** There are seven, all served by `index.html`. The nav links to the first four, labelled About, Workations, Vote and Pitches:
+**Views.** There are six, all served by `index.html`. The nav links to the first three, labelled About, Workations and Vote:
 
 | Path                | View         | What it shows when signed in                                                                                                                                           |
 | ------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                 | `home`       | The landing page: the intro and "What to expect". The only view with public content, and it loads nothing                                                              |
-| `/workations`       | `workations` | Upcoming and past trips, each in a carousel (large slides for upcoming, compact ones for past)                                                                         |
+| `/`                 | `home`       | The landing page: the intro and "What to expect", the only public content. Signed in, "Get involved" sits between them: pitch your own trip, join one, or vote         |
+| `/workations`       | `workations` | "Coming up": confirmed trips and open pitches (cancelled ones until their deadline) in one grid by start date, told apart by a status capsule. Then past trips         |
 | `/vote`             | `vote`       | The polls                                                                                                                                                              |
-| `/pitches`          | `pitches`    | Open pitches (and cancelled ones until their deadline)                                                                                                                 |
 | `/n8ncation/<slug>` | `detail`     | One trip with the RSVP button, your logistics form once you've signed up, and the attendee list if you organize it                                                     |
 | `/me`               | `me`         | Your profile (editable team + job title), your trips including waitlisted ones, and your pitches: open ones link to their edit form, closed ones are folded away below |
-| `/pitch`            | `pitch`      | The form to pitch a trip. With `?edit=<pitchId>`, the same form filled in, for that pitch's organizer only                                                             |
+| `/pitch`            | `pitch`      | The form to pitch a trip, with the most-voted places and months as a hint. With `?edit=<pitchId>`, the same form filled in, for that pitch's organizer only            |
 
-A small inline script in `<head>` sets `<html data-view="…">` before first paint. CSS hides every element whose `data-only` doesn't match the view, and `main.ts` reads `data-view` to decide what to mount and which nav link (`data-nav`) gets `aria-current`. In the same way, `main.ts` sets `<html data-session="signed-in|signed-out">` at boot: elements marked `data-private` only show signed in, and elements marked `data-signed-out` (the banner) only show signed out. Before that runs, neither shows. Elements are found through `data-*` hooks, and repeated items (trip cards, poll cards, options, rows) are cloned from `<template>`s.
+`/pitches` opens the `workations` view too: pitches used to have their own page, and the Slack bot's messages still link there. A small inline script in `<head>` sets `<html data-view="…">` before first paint. CSS hides every element whose `data-only` doesn't match the view, and `main.ts` reads `data-view` to decide what to mount and which nav link (`data-nav`) gets `aria-current`. In the same way, `main.ts` sets `<html data-session="signed-in|signed-out">` at boot: elements marked `data-private` only show signed in, and elements marked `data-signed-out` (the banner) only show signed out. Before that runs, neither shows. Elements are found through `data-*` hooks, and repeated items (trip cards, poll cards, options, rows) are cloned from `<template>`s.
 
 **Conventions worth keeping:**
 
-- Feature modules don't import each other. Shared data goes through `main.ts`, which on `/me` loads `GET /me` and `GET /workations` once and passes them to both `profile.ts` and `workations.ts`. It loads `GET /pitches` for the same page separately and passes it to `pitches.ts` for "your pitches". On the trip page, `workations.ts` reports the reader's RSVP state through a callback, and `main.ts` hands it to `logistics.ts`. Helpers more than one feature needs live outside `src/features` (`dates.ts`, `dom.ts`, `format.ts`).
+- Feature modules don't import each other. Shared data goes through `main.ts`, which on `/me` loads `GET /me` and `GET /workations` once and passes them to both `profile.ts` and `workations.ts`. It loads `GET /pitches` for the same page separately and passes it to `pitches.ts` for "your pitches". On `/workations`, `main.ts` loads `GET /workations` and `GET /pitches` in parallel; `workations.ts` and `pitches.ts` each build their own cards (`ListedCard` in `dom.ts`), and `main.ts` merges them by start date. On the trip page, `workations.ts` reports the reader's RSVP state through a callback, and `main.ts` hands it to `logistics.ts`. Helpers more than one feature needs live outside `src/features` (`dates.ts`, `dom.ts`, `format.ts`, `poll-picks.ts`).
 - Every network call goes through `src/api/client.ts`. Each function there has a matching function in `mock.ts`, and both are typed by `types.ts`.
-- Everything except the intro, "What to expect" and the sign-in banner is private: the markup carries `data-private`, and it's only mounted from `mountView()` in `main.ts` once someone is signed in. Being signed in only means a token is stored, and the browser never verifies it, so each view also stays hidden until its first authenticated API call succeeds. `/pitch` loads no data, so it calls `GET /me` just for that check. In edit mode it loads `GET /pitches` instead, which is the check too. A demo token left over from mock mode is dropped as soon as `VITE_API_BASE` is set.
+- Everything except the intro, "What to expect" and the sign-in banner is private: the markup carries `data-private`, and it's only mounted from `mountView()` in `main.ts` once someone is signed in. Being signed in only means a token is stored, and the browser never verifies it, so each view also stays hidden until its first authenticated API call succeeds. `/pitch` loads no data of its own, so it calls `GET /me` just for that check. `GET /polls` runs alongside it for the voting hint, which never holds up the form. In edit mode it loads `GET /pitches` instead, which is the check too. "Get involved" on home stays hidden until at least one of its three calls succeeds. A demo token left over from mock mode is dropped as soon as `VITE_API_BASE` is set.
 - Writes (votes, suggestions, RSVPs, pitch interest, cancelling a pitch, profile and logistics saves) are optimistic, except creating or editing a pitch, which has nothing on its page to update.
 - Edit and cancel controls only show on pitches with `organizedByMe`, but that's a convenience. The real check is in the `/pitch-update` and `/pitch-cancel` workflows, which compare the pitch's `organizer` with `jwtPayload.sub` and answer 404 to anyone else. The UI updates right away, rolls back if the request fails, and locks the control while the request is in flight. The lock matters because Data Table upserts aren't atomic (see [Scaling](#scaling-to-500-users)).
 - All server and user content is inserted with `textContent`, never `innerHTML`.
@@ -220,7 +221,7 @@ Each route is its own n8n workflow, named after its path (`/workations`, `/me`, 
 `Workation` = `{ workationId, slug, title, place, startDate, endDate, description, imageUrl, imageAlt, accommodationUrl, costEstimate: number | null, costIncludes, attendees, capacity: number | null, waitlisted, organizer: { name, … } | null }`. For a trip that started as a pitch, the photo, accommodation link and cost are copied over from the pitch.
 `Logistics` = `{ dietary, roomPreference, arrival, departure, emergencyContact }`, every field `string | null`. `arrival` and `departure` are `YYYY-MM-DDTHH:MM` in destination time.
 `RosterEntry` = `{ name, email, team, status: "going" | "waitlist", position: number | null, logistics: Logistics | null }`.
-`Pitch` = `{ pitchId, status: "open" | "cancelled" | "confirmed" | "expired", cancelReason, place, startDate, endDate, description, accommodationUrl, imageUrl, imageAlt, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes, interested, interestedByMe, organizedByMe, organizer: { name } | null, slackUrl }`. `cancelReason` is `""` unless cancelled. `slackUrl` links to the pitch's Slack thread, `""` when it has none. `slackChannelUrl` links to the channel, `""` when the `SLACK_CHANNEL_URL` variable is unset; the link on `/pitches` only shows when it's set. `/pitches` shows only open pitches and cancelled ones before their deadline; your other pitches are only for `/me`.
+`Pitch` = `{ pitchId, status: "open" | "cancelled" | "confirmed" | "expired", cancelReason, place, startDate, endDate, description, accommodationUrl, imageUrl, imageAlt, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes, interested, interestedByMe, organizedByMe, organizer: { name } | null, slackUrl }`. `cancelReason` is `""` unless cancelled. `slackUrl` links to the pitch's Slack thread, `""` when it has none. `slackChannelUrl` links to the channel, `""` when the `SLACK_CHANNEL_URL` variable is unset; the link on `/workations` only shows when it's set. `/workations` shows only open pitches and cancelled ones before their deadline; your other pitches are only for `/me`.
 `NewPitch` = `{ place, startDate, endDate, description, accommodationUrl: string | null, imageUrl: string | null, imageAlt: string | null, capacity: number | null, threshold, deadline, costEstimate: number | null, costIncludes: string | null }`.
 **Photos are links, never uploads.** `imageUrl` is an `https` link to an image already online, usually copied from the accommodation's website ("Copy image address"), so only the URL is stored. The pitch form loads the link before it can be submitted, because only a browser can tell an image link from a link to a web page. Photos are shown with `referrerpolicy="no-referrer"`, since many sites refuse images embedded elsewhere when they see a Referer. A link that breaks later (the listing is taken down, or the URL expires) falls back to the grey photo area. Loading a photo tells its host the viewer's IP address, but not which page they're on.
 The full contract is in `src/api/types.ts`.
@@ -234,8 +235,8 @@ The full contract is in `src/api/types.ts`.
 When `VITE_API_BASE` is empty, `client.ts` routes every call to `src/api/mock.ts`:
 
 - In-memory seed data: three trips, some votes and signups, one suggested location, three open pitches and some logistics. Roche (upcoming) has one spot left and is organized by the demo user, so it shows the attendee list. Lapland (upcoming) is full, so signing up joins the waitlist. Lisbon is past. Roche also carries an accommodation link and a cost, as a confirmed pitch would, so its page shows them; the other two show neither. No seed pitch has a photo, because a photo must be an `https` link and the mock runs on `http://localhost`; paste any https image link into the form to try it. The demo user pitched Lake Bled, so its card has the edit and cancel controls, and it is listed under "Your pitches" on `/me`, along with two closed demo pitches (Tallinn expired, Roche went ahead) folded away below.
-- Porto and Lake Bled carry a placeholder Slack thread link, and `/pitches` shows a placeholder channel link (`example.slack.com`). Mock mode sends no Slack messages.
-- Nothing confirms or expires pitches in mock mode, since that's the scheduled workflow's job. Pages are separate documents, so a pitch submitted or edited on `/pitch` is back to its seed state by the time `/pitches` loads. Cancelling happens on `/pitches`, so it stays visible until you reload.
+- Porto and Lake Bled carry a placeholder Slack thread link, and `/workations` shows a placeholder channel link (`example.slack.com`). Mock mode sends no Slack messages.
+- Nothing confirms or expires pitches in mock mode, since that's the scheduled workflow's job. Pages are separate documents, so a pitch submitted or edited on `/pitch` is back to its seed state by the time `/workations` loads. Cancelling happens on `/workations`, so it stays visible until you reload.
 - **Sign in (demo)** creates a local, **unsigned** session for "Demo Colleague". n8n would reject this token; it exists only to drive the mock.
 - Every call waits about 260 ms to simulate the network. All state resets on reload, and a banner says so.
 
@@ -247,7 +248,7 @@ Use mock mode to build or review UI without touching real data. When the API con
 
 - **Add a trip:** add a row to the `workations` Data Table (columns above), or let a pitch become one. It appears on `/workations` right away and gets its own page at `/n8ncation/<slug>`. Once `end_date` has passed, it moves to "Past n8ncations" and the RSVP button disappears.
 - **Change a trip's capacity:** edit `capacity`. Raising it doesn't move anyone off the waitlist by itself; set the oldest waitlist rows to `going` by hand.
-- **Withdraw a pitch:** its organizer can cancel it from its card on `/pitches`, with a reason. To remove one by hand without a reason showing, set its `status` to `expired`.
+- **Withdraw a pitch:** its organizer can cancel it from its card on `/workations`, with a reason. To remove one by hand without a reason showing, set its `status` to `expired`.
 - **Seed a poll option:** add a `poll_options` row with `created_by_sub = seed`. Also add it to `seedOptions` in `src/data/polls.ts` if it should show before results load.
 - **Remove a poll option:** delete its `poll_options` row. Existing votes for it are ignored in the counts.
 
@@ -286,7 +287,7 @@ All money amounts are in EUR for now. No currency is stored or sent: `cost_estim
 
 **Design.** Any new UI follows [`n8ndesign.md`](n8ndesign.md) and uses the tokens in `src/styles/tokens.css`. Don't add raw colors, sizes or a hand-drawn logo.
 
-**Load per page view:** signed out, no view makes any calls. Signed in, home makes none, `/workations` makes 1 (`/workations`), `/vote` makes 2 (`/polls`, then `/me` for your own votes) and `/pitches` makes 1 (`/pitches`). The detail page makes 2, plus `/logistics` once you're signed up and `/roster` if you organize the trip. `/me` makes 3 (`/me`, `/workations`, `/pitches`), and `/pitch` makes 1 (`/me`, to verify the session, or `/pitches` when editing). Each vote or RSVP adds one write. A launch announcement to all 500 people could mean around 1,500 executions within minutes.
+**Load per page view:** signed out, no view makes any calls. Signed in, home makes 3 (`/pitches`, `/workations`, `/polls`, for "Get involved"), `/workations` makes 2 (`/workations`, `/pitches`) and `/vote` makes 2 (`/polls`, then `/me` for your own votes). The detail page makes 2, plus `/logistics` once you're signed up and `/roster` if you organize the trip. `/me` makes 3 (`/me`, `/workations`, `/pitches`), and `/pitch` makes 2 (`/me`, to verify the session, and `/polls` for the hint), or 1 when editing (`/pitches`). Each vote or RSVP adds one write. A launch announcement to all 500 people could mean around 1,500 executions within minutes.
 
 Things to watch as usage grows, roughly in order:
 

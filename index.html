@@ -18,7 +18,7 @@
       type="image/svg+xml"
       href="%BASE_URL%n8n-symbol-accent.svg"
     />
-    <!-- This one file serves every view (/, /workations, /vote, /pitches,
+    <!-- This one file serves every view (/, /workations, /vote,
          /n8ncation/<slug>, /pitch and /me): every unknown path
          falls back to index.html (Vite's default SPA fallback in dev and
          preview, and what any future host has to be configured to do), so
@@ -41,11 +41,13 @@
             path = path.slice(prefix.length);
           }
         }
-        /* Path (without a trailing slash) to view. */
+        /* Path (without a trailing slash) to view. Trips and pitches share
+           one page; /pitches stays as an alias because the Slack bot's
+           messages link to it. */
         var views = {
           "/workations": "workations",
           "/vote": "vote",
-          "/pitches": "pitches",
+          "/pitches": "workations",
           "/pitch": "pitch",
           "/me": "me",
         };
@@ -65,9 +67,6 @@
     >
     <a class="skip" href="#polls" data-only="vote" data-private
       >Skip to the polls</a
-    >
-    <a class="skip" href="#pitches" data-only="pitches" data-private
-      >Skip to pitches</a
     >
     <a class="skip" href="#workation" data-only="detail" data-private
       >Skip to the n8ncation</a
@@ -94,8 +93,7 @@
         <a href="%BASE_URL%" data-nav="home">About</a
         ><a href="%BASE_URL%workations" data-nav="workations" data-private
           >Workations</a
-        ><a href="%BASE_URL%vote" data-nav="vote" data-private>Vote</a
-        ><a href="%BASE_URL%pitches" data-nav="pitches" data-private>Pitches</a>
+        ><a href="%BASE_URL%vote" data-nav="vote" data-private>Vote</a>
       </nav>
       <div class="auth" data-auth></div>
     </header>
@@ -416,6 +414,14 @@
             your deadline. If enough people are in, your pitch becomes an
             n8ncation the next day, with you as the organizer.
           </p>
+          <!-- The most-voted places and months, from GET /polls. Filled by
+               showPicks() in src/features/pitches.ts; stays hidden if the
+               polls fail to load or nobody has voted. -->
+          <p class="detail-section-intro pitch-picks" data-pitch-picks hidden>
+            Not sure where or when? Most votes so far:
+            <span data-pitch-picks-text></span>.
+            <a href="%BASE_URL%vote">See all poll results</a>
+          </p>
           <form class="pitch-form">
             <div class="field field-wide">
               <label class="field-label" for="pitch-place">Place</label>
@@ -586,7 +592,7 @@
             <div class="form-actions field-wide">
               <a
                 class="auth-button auth-button-quiet"
-                href="%BASE_URL%pitches"
+                href="%BASE_URL%workations"
                 data-pitch-back
                 >Cancel</a
               >
@@ -603,6 +609,23 @@
           The ultimate remote work and vacation experience for the n8n team!
         </p>
       </section>
+      <!-- Signed-in only: two ways to take part, pitching your own trip (and
+           voting) first, then joining one. Filled by mountInvolved() in
+           src/features/involved.ts from GET /pitches, /workations and
+           /polls, and hidden until one of them succeeds. -->
+      <section
+        class="involved wrap"
+        data-only="home"
+        data-private
+        data-involved
+        aria-labelledby="involved-title"
+        hidden
+      >
+        <div class="section-heading">
+          <h2 id="involved-title">Get involved</h2>
+        </div>
+        <div class="involved-grid" data-involved-cards></div>
+      </section>
       <!-- Shown on every view while signed out, in place of everything marked
            data-private. The button is wired up by src/main.ts. -->
       <section
@@ -617,53 +640,51 @@
         </p>
         <button class="auth-button" type="button" data-signin>Sign in</button>
       </section>
-      <!-- /workations: upcoming and past trips, filled from GET /workations
-           by mountWorkations(). -->
+      <!-- /workations (and its alias /pitches): confirmed trips and open
+           pitches in one list, told apart by their status capsule, then past
+           trips. Filled by loadComingUp() in src/main.ts from GET /workations
+           and GET /pitches. -->
       <div class="page-head wrap" data-only="workations" data-private>
         <h1 class="page-title">n8ncations</h1>
-        <p class="polls-intro">
-          Where we’re going next and where we’ve been. Open an upcoming trip to
-          RSVP.
+        <div class="trips-lead">
+          <p class="polls-intro">
+            Confirmed trips and pitches still collecting interest. RSVP to a
+            confirmed trip, or say you’re interested in a pitch so it can go
+            ahead.
+          </p>
+          <a class="button-accent" href="%BASE_URL%pitch">Pitch an n8ncation</a>
+        </div>
+        <!-- The link comes from GET /pitches (slackChannelUrl), so it only
+             shows once that call has succeeded and the variable is set. -->
+        <p class="polls-intro trips-link" data-pitches-slack hidden>
+          Talk trips through in
+          <a target="_blank" rel="noopener noreferrer"
+            >#mission-n8n-workations</a
+          >
+          on Slack. Every new pitch gets its own thread there.
+        </p>
+        <p class="polls-intro trips-link">
+          Not sure where or when?
+          <a href="%BASE_URL%vote">See what people voted for</a>
         </p>
       </div>
       <section
-        class="workations wrap"
+        class="coming-up wrap"
         id="workations"
         data-only="workations"
         data-private
-        aria-labelledby="upcoming-title"
+        aria-labelledby="coming-up-title"
       >
-        <!-- The carousel controls are wired by mountCarousel() in
-             src/features/workations.ts, and stay hidden while every card
-             fits. -->
         <div class="section-heading">
-          <h2 id="upcoming-title">Upcoming n8ncation</h2>
-          <div class="carousel-controls" data-carousel-controls hidden>
-            <button
-              class="carousel-button"
-              type="button"
-              data-carousel-prev
-              aria-label="Previous upcoming n8ncations"
-            >
-              <span aria-hidden="true">←</span>
-            </button>
-            <button
-              class="carousel-button"
-              type="button"
-              data-carousel-next
-              aria-label="Next upcoming n8ncations"
-            >
-              <span aria-hidden="true">→</span>
-            </button>
-          </div>
+          <h2 id="coming-up-title">Coming up</h2>
         </div>
         <noscript>
           <p class="trip-state">
             The n8ncation list needs JavaScript — it is loaded from the n8n API.
           </p>
         </noscript>
-        <div data-upcoming>
-          <p class="trip-state" data-upcoming-state role="status">
+        <div class="trip-grid" data-coming-up>
+          <p class="trip-state" data-coming-up-state role="status">
             Loading n8ncations…
           </p>
         </div>
@@ -701,7 +722,7 @@
           </ul>
           <p class="about-note">
             n8ncations are organized by n8n employees, for n8n employees. They
-            aren’t sponsored by n8n directly, at least not yet.
+            aren’t sponsored by n8n directly, at least not yet 😉
           </p>
         </div>
       </section>
@@ -732,42 +753,10 @@
         </p>
         <div class="poll-grid" data-polls hidden></div>
       </section>
-      <section
-        class="pitches wrap"
-        id="pitches"
-        data-only="pitches"
-        data-private
-        aria-labelledby="pitches-title"
-      >
-        <div class="section-heading">
-          <h1 class="page-title" id="pitches-title">Pitched n8ncations</h1>
-        </div>
-        <div class="pitches-lead">
-          <p class="polls-intro">
-            Anyone can pitch a trip. If enough people are interested by the
-            deadline, it becomes an n8ncation, and everyone interested gets a
-            spot or a place on the waitlist.
-          </p>
-          <a class="button-accent" href="%BASE_URL%pitch">Pitch an n8ncation</a>
-        </div>
-        <!-- The link comes from GET /pitches (slackChannelUrl), so it only
-             shows once that call has succeeded and the variable is set. -->
-        <p class="polls-intro pitches-slack" data-pitches-slack hidden>
-          Talk trips through in
-          <a target="_blank" rel="noopener noreferrer"
-            >#mission-n8n-workations</a
-          >
-          on Slack. Every new pitch gets its own thread there.
-        </p>
-        <div class="pitch-grid" data-pitches>
-          <p class="trip-state" data-pitches-state role="status">
-            Loading pitches…
-          </p>
-        </div>
-      </section>
       <!-- One preview card per n8ncation, filled from GET /workations. The
            heading links through to /n8ncation/<slug> for the full card.
-           Each card is a slide in a carousel on /workations; past trips add
+           Confirmed trips sit in the "Coming up" grid on /workations, next
+           to the pitch cards. Past trips are slides in a carousel and add
            .trip-compact, which drops the description and status. -->
       <template id="trip-template">
         <article class="trip">
@@ -790,7 +779,8 @@
           </div>
         </article>
       </template>
-      <!-- One card per pitch, filled from GET /pitches. The bar is
+      <!-- One card per pitch on /workations, filled from GET /pitches. The
+           status capsule says "Pitch" or "Cancelled". The bar is
            decoration: the text beside it says the same thing. A cancelled
            pitch swaps the progress and button for the organizer's reason.
            The organizer's own card gets the edit and cancel controls; the
@@ -808,7 +798,7 @@
           </div>
           <div class="pitch-top">
             <h3 class="pitch-place"></h3>
-            <span class="status pitch-deadline"></span>
+            <span class="status pitch-state"></span>
           </div>
           <p class="dates pitch-dates"></p>
           <p class="pitch-description"></p>
@@ -888,6 +878,24 @@
           <p class="pitch-status" role="status"></p>
         </article>
       </template>
+      <!-- One card per way to take part in "Get involved" on home, filled by
+           buildCard() in src/features/involved.ts. The most-voted block
+           (vote card only) and the live line stay hidden when a card has
+           none. -->
+      <template id="involved-template">
+        <article class="involved-card">
+          <span class="capsule involved-label"></span>
+          <h3 class="involved-title"></h3>
+          <p class="involved-body"></p>
+          <div class="involved-picks" hidden>
+            <p class="involved-picks-label">Most votes so far</p>
+          </div>
+          <p class="involved-live" hidden></p>
+          <div class="involved-links">
+            <a class="involved-cta"></a>
+          </div>
+        </article>
+      </template>
       <template id="poll-template">
         <article class="poll" data-poll>
           <h3 class="poll-question"></h3>
@@ -940,11 +948,14 @@
           </button>
         </li>
       </template>
+      <!-- Hidden until GET /workations succeeds; loadComingUp() in
+           src/main.ts reveals it. -->
       <section
         class="past wrap"
         data-only="workations"
         data-private
         aria-labelledby="past-title"
+        hidden
       >
         <div class="section-heading">
           <h2 id="past-title">Past n8ncations</h2>

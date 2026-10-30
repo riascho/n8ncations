@@ -1,10 +1,12 @@
 /* Pitches: trips anyone can propose, which go ahead only with enough
    interest.
 
-   - /pitches: one card per open pitch, with an "I'm interested"
-     toggle and progress towards the pitch's threshold. The organizer's own
-     card can also be edited or cancelled. A cancelled pitch stays listed,
-     with the organizer's reason, until its deadline.
+   - /workations (also served at /pitches): one card per open pitch in the
+     "Coming up" grid, next to the confirmed trips, with an "I'm
+     interested" toggle and progress towards the pitch's threshold. main.ts
+     loads the data and merges the cards. The organizer's own card can also
+     be edited or cancelled. A cancelled pitch stays listed, with the
+     organizer's reason, until its deadline.
    - /pitch: the form to submit one. The person pitching becomes the
      organizer and counts as the first interested person.
    - /pitch?edit=<pitchId>: the same form, filled in, for the organizer.
@@ -27,8 +29,10 @@ import {
   todayIso,
 } from "../dates";
 import { requireEl, template } from "../dom";
+import type { ListedCard } from "../dom";
 import { euros, httpsUrl, safeUrl } from "../format";
 import { appPath } from "../paths";
+import { picksSummary } from "../poll-picks";
 
 /* Limits shared with the validation in the /pitch, /pitch-update and
    /pitch-cancel workflows. Change them together. */
@@ -69,12 +73,13 @@ function editPath(pitchId: string): string {
 }
 
 /* ----------------------------------------------------------------
-   Cards, /pitches
+   Cards, /workations
    ---------------------------------------------------------------- */
 
 interface PitchView {
   root: HTMLElement;
-  deadline: HTMLElement;
+  /** The status capsule: "Pitch" or "Cancelled". */
+  state: HTMLElement;
   progressBox: HTMLElement;
   progress: HTMLElement;
   bar: HTMLElement;
@@ -94,20 +99,21 @@ interface PitchView {
   confirming: boolean;
 }
 
+/* The deadline lives here rather than in the capsule: on /workations the
+   capsule is what tells a pitch apart from a confirmed trip. */
 function progressText(pitch: Pitch): string {
+  const closes = `closes ${formatDay(pitch.deadline)}`;
   if (pitch.interested >= pitch.threshold) {
-    return `${pitch.interested} interested · enough to go ahead`;
+    return `${pitch.interested} interested · enough to go ahead · ${closes}`;
   }
-  return `${pitch.interested} of ${pitch.threshold} interested`;
+  return `${pitch.interested} of ${pitch.threshold} interested · ${closes}`;
 }
 
 function renderPitch(v: PitchView): void {
   const { pitch } = v;
   const cancelled = pitch.status === "cancelled";
   v.root.classList.toggle("is-cancelled", cancelled);
-  v.deadline.textContent = cancelled
-    ? "Cancelled"
-    : `Closes ${formatDay(pitch.deadline)}`;
+  v.state.textContent = cancelled ? "Cancelled" : "Pitch";
   v.progressBox.hidden = cancelled;
   v.button.hidden = cancelled;
   v.cancelled.hidden = !cancelled;
@@ -313,7 +319,7 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
 
   const view: PitchView = {
     root: card,
-    deadline: requireEl(card, ".pitch-deadline"),
+    state: requireEl(card, ".pitch-state"),
     progressBox: requireEl(card, ".pitch-progress"),
     progress: requireEl(card, ".pitch-progress-text"),
     bar: requireEl(card, ".pitch-bar"),
@@ -370,7 +376,7 @@ function byDeadline(a: Pitch, b: Pitch): number {
   return ordinal(left) - ordinal(right);
 }
 
-/* /pitches lists what everyone gets from GET /pitches: open pitches, and
+/* /workations lists what everyone gets from GET /pitches: open pitches, and
    cancelled ones until their deadline. The caller's own closed pitches,
    which the route also sends, are only for /me. */
 function isListed(pitch: Pitch): boolean {
@@ -380,42 +386,31 @@ function isListed(pitch: Pitch): boolean {
   );
 }
 
-export async function mountPitches(slot: HTMLElement): Promise<void> {
-  const state = slot.querySelector("[data-pitches-state]");
-  let pitches: Pitch[];
-  let slackChannelUrl: string;
-  try {
-    ({ pitches, slackChannelUrl } = await api.getPitches());
-    pitches = pitches.filter(isListed);
-  } catch (error) {
-    if (state) {
-      state.textContent = describe(error, "The pitches could not be loaded.");
-    }
-    return;
-  }
+/** One card per listed pitch, for the "Coming up" grid on /workations.
+    main.ts fetches GET /pitches and merges these with the trip cards by
+    start date; cancelled pitches go after everything else. */
+export function pitchCards(pitches: Pitch[]): ListedCard[] {
+  return pitches
+    .filter(isListed)
+    .sort(byDeadline)
+    .map((pitch) => ({
+      card: buildPitchCard(pitch),
+      startDate: pitch.startDate,
+      last: pitch.status === "cancelled",
+    }));
+}
 
-  /* The channel link sits in the page's lead, outside the grid. It is only
-     revealed now that GET /pitches has succeeded, and stays hidden while
-     the SLACK_CHANNEL_URL variable is unset. */
-  const channel = slot
-    .closest("section")
-    ?.querySelector<HTMLElement>("[data-pitches-slack]");
+/* The channel link sits in the page's lead, outside the grid. main.ts only
+   calls this once GET /pitches has succeeded, and it stays hidden while the
+   SLACK_CHANNEL_URL variable is unset. */
+export function showSlackChannel(
+  channel: HTMLElement,
+  slackChannelUrl: string,
+): void {
   const channelUrl = slackChannelUrl ? safeUrl(slackChannelUrl) : null;
-  if (channel && channelUrl) {
+  if (channelUrl) {
     requireEl(channel, "a").setAttribute("href", channelUrl);
     channel.hidden = false;
-  }
-
-  slot.replaceChildren();
-  /* Cancelled pitches don't count as open, but their cards still follow. */
-  if (!pitches.some((pitch) => pitch.status === "open")) {
-    const none = document.createElement("p");
-    none.className = "trip-state";
-    none.textContent = "No open pitches right now. Have an idea? Pitch it.";
-    slot.appendChild(none);
-  }
-  for (const pitch of [...pitches].sort(byDeadline)) {
-    slot.appendChild(buildPitchCard(pitch));
   }
 }
 
@@ -774,7 +769,7 @@ async function submitPitch(v: FormView): Promise<void> {
 
   /* Not optimistic, whether new or edited: there is nothing on this page to
      update. The form locks until the pitch is stored, then hands over to the
-     list on /pitches. */
+     list on /workations. */
   v.busy = true;
   renderForm(v);
   const editing = v.editing;
@@ -789,7 +784,7 @@ async function submitPitch(v: FormView): Promise<void> {
       await api.createPitch(result);
       v.status.textContent = "Pitch submitted. Taking you to the list…";
     }
-    location.assign(appPath("/pitches"));
+    location.assign(appPath("/workations"));
   } catch (error) {
     v.busy = false;
     renderForm(v);
@@ -898,10 +893,14 @@ export function mountPitchForm(root: HTMLElement): void {
 /* The stored session is only decoded in the browser, never verified, and
    this page needs no data, so nothing else would ever check it. GET /me is
    the cheapest authenticated call: n8n's JWT Auth verifies the token, and
-   the page shows only once it has. */
+   the page shows only once it has.
+
+   GET /polls goes alongside it for the "most votes so far" hint. It never
+   holds up the form: if it fails, the hint just stays hidden. */
 async function revealWhenVerified(root: HTMLElement): Promise<void> {
   const state = requireEl(root, "[data-pitch-state]");
   const body = requireEl(root, "[data-pitch-body]");
+  const polls = api.getPolls().catch(() => null);
   try {
     await api.getMe();
   } catch (error) {
@@ -910,6 +909,19 @@ async function revealWhenVerified(root: HTMLElement): Promise<void> {
   }
   state.hidden = true;
   body.hidden = false;
+  const result = await polls;
+  if (result) {
+    showPicks(root, picksSummary(result));
+  }
+}
+
+/* The hint above the form pointing at the poll results. */
+function showPicks(root: HTMLElement, picks: string): void {
+  if (picks === "") {
+    return;
+  }
+  requireEl(root, "[data-pitch-picks-text]").textContent = picks;
+  requireEl(root, "[data-pitch-picks]").hidden = false;
 }
 
 /* Editing does need data, the pitch itself, so GET /pitches is both the load

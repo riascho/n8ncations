@@ -100,7 +100,6 @@ li {
 :root[data-view]:not([data-view="home"]) [data-only="home"],
 :root:not([data-view="workations"]) [data-only="workations"],
 :root:not([data-view="vote"]) [data-only="vote"],
-:root:not([data-view="pitches"]) [data-only="pitches"],
 :root:not([data-view="detail"]) [data-only="detail"],
 :root:not([data-view="me"]) [data-only="me"],
 :root:not([data-view="pitch"]) [data-only="pitch"] {
@@ -301,7 +300,7 @@ li {
   line-height: 36px;
 }
 
-/* The top of /workations, /vote and /pitches. */
+/* The top of /workations and /vote. */
 .page-head {
   display: grid;
   gap: var(--space-16);
@@ -312,8 +311,9 @@ li {
    Trip card
    ---------------------------------------------------------------- */
 
-/* A carousel slide: photo on top, details below. Full height, so every
-   slide in a row ends on the same line. */
+/* A grid cell in "Coming up", or a past-trip carousel slide: photo on top,
+   details below. Full height, so every card in a row ends on the same
+   line. */
 .trip {
   display: flex;
   flex-direction: column;
@@ -346,6 +346,12 @@ li {
   position: absolute;
   bottom: var(--space-24);
   left: var(--space-24);
+}
+
+/* In "Coming up" the pink "Confirmed" status leads, so the place label on
+   the photo takes the supporting grey: one pink capsule per card. */
+.trip-in-list .photo-label {
+  background: var(--background-secondary);
 }
 
 .trip-details {
@@ -504,11 +510,6 @@ li {
 .carousel-slide {
   min-width: 0;
   scroll-snap-align: start;
-}
-
-/* Upcoming: two generous slides in view. */
-.carousel-upcoming {
-  grid-auto-columns: calc((100% - var(--space-24)) / 2);
 }
 
 /* Past: four compact slides in view. */
@@ -1026,6 +1027,143 @@ li {
 
 .signin-banner .auth-button {
   margin-top: var(--space-8);
+}
+
+/* ----------------------------------------------------------------
+   Get involved, home, signed in only
+
+   Three cards in a row (src/features/involved.ts), stacked below 900px.
+   The pitch card comes first and takes the Accent Pink fill, Core Black on
+   Main Accent Pink at 8.29:1. Its capsule keeps the grey fill so it still
+   reads against the pink. The join card is grey with a plain link. The
+   vote card sits on the dot grid (§2.2) with the most-voted answers set
+   large, so it stands apart from the join card without a second pink.
+   ---------------------------------------------------------------- */
+
+.involved {
+  padding-top: var(--space-64);
+}
+
+.involved[hidden],
+.involved-picks[hidden],
+.involved-live[hidden] {
+  display: none;
+}
+
+.involved-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-24);
+}
+
+.involved-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-16);
+  height: 100%;
+  padding: var(--space-32);
+  border-radius: var(--radius-lg);
+  background: var(--background-secondary);
+  color: var(--type-primary);
+}
+
+.involved-card-accent {
+  background: var(--background-accent-pink);
+}
+
+/* The dot grid steps at 24px, like the intro's, so it stays in step with
+   the 8px grid. On Background/Primary rather than the grey card fill, so
+   the dots read as clearly as they do behind the intro. */
+.involved-card-vote {
+  border: 1px solid var(--stroke-secondary);
+  background-color: var(--background-primary);
+  background-image: radial-gradient(
+    var(--dot-grid-primary) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+}
+
+/* "Most votes so far", then the top places and months. */
+.involved-picks {
+  display: grid;
+  gap: var(--space-8);
+}
+
+/* body-md */
+.involved-picks-label {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-secondary);
+}
+
+/* heading-x-sm */
+.involved-picks-value {
+  font-size: 24px;
+  line-height: 24px;
+  font-weight: var(--weight-medium);
+  text-wrap: balance;
+}
+
+/* Room for the crosshairs outside the capsule's corners. On the grey
+   card the capsule steps down to Background/Tertiary, so its fill still
+   shows against the card's Background/Secondary. */
+.involved-label {
+  margin: var(--space-8) 0 var(--space-8) var(--space-8);
+  background: var(--background-tertiary);
+}
+
+.involved-card-accent .involved-label {
+  background: var(--background-secondary);
+}
+
+/* heading-sm */
+.involved-title {
+  font-size: 28px;
+  line-height: 32px;
+}
+
+/* body-lg */
+.involved-body,
+.involved-live {
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.involved-live {
+  font-weight: var(--weight-medium);
+}
+
+/* Pushed to the bottom, so every card's links line up. */
+.involved-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-16) var(--space-24);
+  margin-top: auto;
+  padding-top: var(--space-8);
+}
+
+/* body-lg */
+.involved-cta:not(.auth-button) {
+  font-size: 16px;
+  line-height: 20px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.involved-cta:not(.auth-button):hover {
+  text-decoration-thickness: 2px;
+}
+
+.pitch-picks[hidden] {
+  display: none;
+}
+
+.pitch-picks a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 /* ----------------------------------------------------------------
@@ -1714,18 +1852,14 @@ footer > span {
 }
 
 /* ----------------------------------------------------------------
-   Pitched n8ncations, home
+   Coming up, /workations
 
-   Bordered cards, the trip card idiom without the photo: a pitch is a trip
-   that does not exist yet.
+   Confirmed trips and pitches in one grid, told apart by their status
+   capsule. Pitch cards use the trip card idiom: a pitch is a trip that
+   does not exist yet.
    ---------------------------------------------------------------- */
 
-/* The whole of /pitches, so it takes the page spacing of /pitch. */
-.pitches {
-  padding: var(--space-32) 0 var(--space-64);
-}
-
-.pitches-lead {
+.trips-lead {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -1733,27 +1867,26 @@ footer > span {
   gap: var(--space-24);
 }
 
-/* The Slack channel line under the lead. Black link text: pink fails
-   contrast as text on the light background. */
-.pitches-slack {
-  margin-top: var(--space-16);
-}
-
-.pitches-slack a {
+/* The Slack channel and poll results lines under the lead. Black link
+   text: pink fails contrast as text on the light background. */
+.trips-link a {
   color: var(--type-primary);
   text-decoration: underline;
   text-underline-offset: 4px;
 }
 
-.pitch-grid {
+.trips-link[hidden] {
+  display: none;
+}
+
+.trip-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-24);
-  margin-top: var(--space-24);
 }
 
-/* A lone state line spans the grid instead of sitting in one column. */
-.pitch-grid > .trip-state {
+/* A state line spans the grid instead of sitting in one column. */
+.trip-grid > .trip-state {
   grid-column: 1 / -1;
 }
 
@@ -2119,7 +2252,13 @@ footer > span {
     line-height: 48px;
   }
 
-  .pitch-grid {
+  /* Three cards don't fit side by side any more: one per row. */
+  .involved-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-16);
+  }
+
+  .trip-grid {
     grid-template-columns: 1fr;
     gap: var(--space-16);
   }
@@ -2189,8 +2328,8 @@ footer > span {
     gap: var(--space-16);
   }
 
-  .carousel-upcoming {
-    grid-auto-columns: 85%;
+  .involved-card {
+    padding: var(--space-24);
   }
 
   .carousel-past {
