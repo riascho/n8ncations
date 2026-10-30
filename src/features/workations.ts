@@ -195,8 +195,17 @@ function buildListingCard(
     }
   }
 
-  /* textContent throughout: operator-entered Data Table content. */
-  requireEl(card, ".listing-eyebrow").textContent = trip.title;
+  /* textContent throughout: operator-entered Data Table content. Who runs
+     the trip, as the eyebrow, where a pitch card says who pitched it: the
+     same line, reworded once the pitch becomes a trip. Left out when the
+     trip names no organizer. */
+  const eyebrow = requireEl(card, ".listing-eyebrow");
+  const organizerName = trip.organizer?.name.trim() ?? "";
+  if (organizerName) {
+    eyebrow.textContent = `Organized by ${organizerName}`;
+  } else {
+    eyebrow.remove();
+  }
   /* The title links to the trip page. */
   const link = requireEl(heading, "a");
   link.textContent = trip.place;
@@ -249,6 +258,7 @@ function buildListingCard(
     signup: me.signups.includes(id) ? "going" : waiting ? "waitlist" : null,
     position: waiting?.position ?? null,
     organizing: me.organizing.includes(id),
+    known: true,
     busy: false,
     edits: 0,
     /* Nothing else on /workations reacts to an RSVP. */
@@ -524,6 +534,10 @@ interface DetailView {
   /** Place in line while `signup` is "waitlist". */
   position: number | null;
   organizing: boolean;
+  /** Whether GET /me has said where the reader stands. Until then the button
+      stays hidden: it can't yet tell the organizer, who gets none, from
+      everyone else. A card gets /me with the list, so it starts known. */
+  known: boolean;
   busy: boolean;
   /** Bumped on every RSVP click, so refreshRsvp() can tell its response is
       stale. */
@@ -558,6 +572,9 @@ function buttonText(v: DetailView): string {
 
 function renderRsvp(v: DetailView): void {
   v.renderCounts();
+  /* The organizer always has a spot on their own trip, so there is nothing
+     for them to RSVP to: no button, on the card or the trip page. */
+  v.button.hidden = !v.known || v.organizing;
   v.button.setAttribute("aria-pressed", v.signup ? "true" : "false");
   v.button.textContent = buttonText(v);
   v.button.disabled = v.busy;
@@ -816,6 +833,8 @@ export async function mountWorkationDetail(
     signup: null,
     position: null,
     organizing: false,
+    /* Shown once refreshRsvp() has heard from GET /me. */
+    known: false,
     busy: false,
     edits: 0,
     onChange,
@@ -859,6 +878,7 @@ async function refreshRsvp(): Promise<void> {
     const me = await api.getMe();
     const id = view.trip.workationId;
     view.organizing = me.organizing.includes(id);
+    view.known = true;
     if (!view.busy && view.edits === startedAt) {
       const waiting = me.waitlist.find((entry) => entry.workationId === id);
       view.signup = me.signups.includes(id)
@@ -876,8 +896,13 @@ async function refreshRsvp(): Promise<void> {
     }
   } catch (error) {
     if (error instanceof ApiError && error.isAuthFailure) {
-      /* Session lapsed. The card already loaded, so leave it up. */
+      /* Session lapsed. The card already loaded, so leave it up, without
+         a button nobody could use. */
       return;
     }
+    /* /me failed for another reason: show the button as it was before the
+       organizer check, rather than leave everyone without one. */
+    view.known = true;
+    renderRsvp(view);
   }
 }

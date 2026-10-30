@@ -138,7 +138,10 @@ function renderPitch(v: PitchView): void {
   v.progressBox.hidden = cancelled;
   v.meta.hidden = cancelled;
   v.meta.textContent = metaText(pitch);
-  v.button.hidden = cancelled;
+  /* Whoever pitched it counts as the first interested person and goes on
+     the trip if it happens, so they get no interest button, on the card or
+     the pitch's page. */
+  v.button.hidden = cancelled || pitch.organizedByMe;
   v.cancelled.hidden = !cancelled;
   v.reason.textContent = pitch.cancelReason;
   /* Only shown to the organizer. Hiding is a convenience, not the check:
@@ -387,8 +390,8 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
   );
   requireEl(card, ".pitch-description").textContent = pitch.description;
 
-  /* Who pitched it, as the card's eyebrow, where a trip card names its
-     edition. */
+  /* Who pitched it, as the card's eyebrow. Once the pitch becomes a trip,
+     its card says "Organized by" in the same place. */
   const organizer = requireEl(card, ".pitch-organizer");
   const organizerName = pitch.organizer?.name.trim() ?? "";
   if (organizerName) {
