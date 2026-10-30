@@ -83,6 +83,8 @@ interface PitchView {
   progressBox: HTMLElement;
   progress: HTMLElement;
   bar: HTMLElement;
+  /** "Closes 15 December 2026 · €650 per person". */
+  meta: HTMLElement;
   button: HTMLButtonElement;
   cancelled: HTMLElement;
   reason: HTMLElement;
@@ -99,14 +101,22 @@ interface PitchView {
   confirming: boolean;
 }
 
-/* The deadline lives here rather than in the capsule: on /workations the
-   capsule is what tells a pitch apart from a confirmed trip. */
 function progressText(pitch: Pitch): string {
-  const closes = `closes ${formatDay(pitch.deadline)}`;
   if (pitch.interested >= pitch.threshold) {
-    return `${pitch.interested} interested · enough to go ahead · ${closes}`;
+    return `${pitch.interested} interested · enough to go ahead`;
   }
-  return `${pitch.interested} of ${pitch.threshold} interested · ${closes}`;
+  return `${pitch.interested} of ${pitch.threshold} interested`;
+}
+
+/* The deadline and the cost, under the bar. The deadline lives here rather
+   than in the capsule: on /workations the capsule is what tells a pitch
+   apart from a confirmed trip. */
+function metaText(pitch: Pitch): string {
+  const parts = [`Closes ${formatDay(pitch.deadline)}`];
+  if (pitch.costEstimate !== null) {
+    parts.push(`${euros.format(pitch.costEstimate)} per person`);
+  }
+  return parts.join(" · ");
 }
 
 function renderPitch(v: PitchView): void {
@@ -115,6 +125,8 @@ function renderPitch(v: PitchView): void {
   v.root.classList.toggle("is-cancelled", cancelled);
   v.state.textContent = cancelled ? "Cancelled" : "Pitch";
   v.progressBox.hidden = cancelled;
+  v.meta.hidden = cancelled;
+  v.meta.textContent = metaText(pitch);
   v.button.hidden = cancelled;
   v.cancelled.hidden = !cancelled;
   v.reason.textContent = pitch.cancelReason;
@@ -239,19 +251,22 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
   card.setAttribute("aria-labelledby", titleId);
 
   /* A link to a photo hosted elsewhere. Without one, or once the link turns
-     out broken (the listing was taken down, the URL expired), the card is
-     simply shown without a photo. */
+     out broken (the listing was taken down, the URL expired), the photo box
+     stays with its dot grid (.listing-photo-empty), so every card in the
+     list keeps the same shape and the status capsule its place. */
   const photoBox = requireEl(card, ".pitch-photo");
   const photo = photoBox.querySelector("img");
   const photoUrl = pitch.imageUrl ? httpsUrl(pitch.imageUrl) : null;
   if (photo && photoUrl) {
     photo.addEventListener("error", () => {
-      photoBox.remove();
+      photo.remove();
+      photoBox.classList.add("listing-photo-empty");
     });
     photo.src = photoUrl;
     photo.alt = pitch.imageAlt;
   } else {
-    photoBox.remove();
+    photo?.remove();
+    photoBox.classList.add("listing-photo-empty");
   }
 
   /* textContent throughout: every field was typed by whoever pitched it. */
@@ -283,10 +298,12 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
     stay.remove();
   }
 
-  const organizer = requireEl(card, "[data-fact=organizer]");
+  /* Who pitched it, as the card's eyebrow, where a trip card names its
+     edition. */
+  const organizer = requireEl(card, ".pitch-organizer");
   const organizerName = pitch.organizer?.name.trim() ?? "";
   if (organizerName) {
-    requireEl(organizer, "dd").textContent = organizerName;
+    organizer.textContent = `Pitched by ${organizerName}`;
   } else {
     organizer.remove();
   }
@@ -323,6 +340,7 @@ function buildPitchCard(pitch: Pitch): HTMLElement {
     progressBox: requireEl(card, ".pitch-progress"),
     progress: requireEl(card, ".pitch-progress-text"),
     bar: requireEl(card, ".pitch-bar"),
+    meta: requireEl(card, ".pitch-meta"),
     button: button(card, ".pitch-button"),
     cancelled: requireEl(card, ".pitch-cancelled"),
     reason: requireEl(card, ".pitch-cancelled-reason"),

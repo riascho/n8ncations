@@ -311,9 +311,9 @@ li {
    Trip card
    ---------------------------------------------------------------- */
 
-/* A grid cell in "Coming up", or a past-trip carousel slide: photo on top,
-   details below. Full height, so every card in a row ends on the same
-   line. */
+/* A past-trip carousel slide: photo on top, details below. Full height, so
+   every slide in the row ends on the same line. Confirmed trips in "Coming
+   up" use .listing instead, further down. */
 .trip {
   display: flex;
   flex-direction: column;
@@ -346,12 +346,6 @@ li {
   position: absolute;
   bottom: var(--space-24);
   left: var(--space-24);
-}
-
-/* In "Coming up" the pink "Confirmed" status leads, so the place label on
-   the photo takes the supporting grey: one pink capsule per card. */
-.trip-in-list .photo-label {
-  background: var(--background-secondary);
 }
 
 .trip-details {
@@ -406,15 +400,6 @@ li {
   line-height: 20px;
 }
 
-/* body-lg */
-.trip-description {
-  max-width: 392px;
-  margin: var(--space-24) 0 0;
-  font-size: 16px;
-  line-height: 20px;
-  color: var(--type-secondary);
-}
-
 /* Pinned to the bottom of the details column, so the line sits on the card's
    baseline however long the description runs.
 
@@ -432,14 +417,8 @@ li {
   color: var(--type-secondary);
 }
 
-/* Past trips: a smaller slide for a quick overview. The status capsule
-   would only repeat the section heading, and the description is one click
-   away on the trip page. */
-.trip-compact .status,
-.trip-compact .trip-description {
-  display: none;
-}
-
+/* Past trips: a smaller slide for a quick overview, with the description
+   one click away on the trip page. */
 .trip-compact .photo-label {
   bottom: var(--space-16);
   left: var(--space-16);
@@ -1854,28 +1833,75 @@ footer > span {
 /* ----------------------------------------------------------------
    Coming up, /workations
 
-   Confirmed trips and pitches in one grid, told apart by their status
-   capsule. Pitch cards use the trip card idiom: a pitch is a trip that
-   does not exist yet.
+   "How it works", then confirmed trips and pitches in one grid. Both card
+   types share one shape (.listing) and differ in fill, border and capsule:
+   a confirmed trip is solid and booked, a pitch is a dashed outline on
+   grey, a trip that isn't built yet. Then the pink band prompting people
+   to pitch their own.
    ---------------------------------------------------------------- */
 
-.trips-lead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
+/* How it works: three steps joined like nodes in a workflow. Each node is
+   a Capsule Connector Dot (Core Black); the line between them is
+   Stroke + Crosshairs/Primary, drawn from each node to the next. */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--space-24);
+  margin: var(--space-24) 0 0;
+  padding: 0;
+  list-style: none;
 }
 
-/* The Slack channel and poll results lines under the lead. Black link
-   text: pink fails contrast as text on the light background. */
-.trips-link a {
+.step {
+  position: relative;
+  padding-top: var(--space-32);
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--type-secondary);
+}
+
+.step::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--space-16);
+  height: var(--space-16);
+  border-radius: var(--radius-full);
+  background: var(--capsule-connector-dot);
+}
+
+/* The line runs from this node to the next one, across the gap. */
+.step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--space-8) - 0.5px);
+  left: var(--space-16);
+  right: calc(var(--space-24) * -1);
+  border-top: 1px solid var(--stroke-primary);
+}
+
+/* body-md/mono, ALL CAPS per §1.2: a label, not a capsule, so the page keeps
+   one capsule style. */
+.step-label {
+  display: block;
+  margin-bottom: var(--space-8);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   color: var(--type-primary);
-  text-decoration: underline;
-  text-underline-offset: 4px;
 }
 
-.trips-link[hidden] {
+/* body-lg/medium */
+.step-count {
+  margin-top: var(--space-8);
+  font-weight: var(--weight-medium);
+  color: var(--type-primary);
+}
+
+.step-count[hidden] {
   display: none;
 }
 
@@ -1890,26 +1916,253 @@ footer > span {
   grid-column: 1 / -1;
 }
 
-.pitch {
+/* One card shape for both kinds. Full height, with the progress pinned to
+   the bottom, so every card in a row ends on the same line. */
+.listing {
   display: flex;
   flex-direction: column;
-  padding: var(--space-32);
-  border: 1px solid var(--stroke-secondary);
+  height: 100%;
   border-radius: var(--radius-lg);
   overflow: hidden;
+}
+
+/* Booked: a solid outline on the page colour. */
+.listing-trip {
+  border: 1px solid var(--stroke-primary);
   background: var(--background-primary);
 }
 
-/* The pitch's photo link, across the top like a trip card's photo: the
-   negative margins cancel the card's padding. */
-.pitch-photo {
+/* Not built yet: a dashed outline on grey. */
+.listing-pitch {
+  border: 1px dashed var(--stroke-primary);
+  background: var(--background-secondary);
+}
+
+.listing-photo {
+  position: relative;
+  flex-shrink: 0;
   aspect-ratio: 3 / 2;
-  margin: calc(var(--space-32) * -1) calc(var(--space-32) * -1) var(--space-24);
   overflow: hidden;
   background: var(--background-tertiary);
 }
 
-.pitch-photo img,
+.listing-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* No photo, or its link broke: a short strip of dot grid (§2.2), at the
+   intro's 24px step, still carries the status capsule without leaving a
+   large empty box. */
+.listing-photo-empty {
+  aspect-ratio: auto;
+  height: var(--space-120);
+  background-color: var(--background-primary);
+  background-image: radial-gradient(
+    var(--dot-grid-primary) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+}
+
+/* Capsule styling comes from the capsule block; this places it. Offsets
+   leave room for the crosshairs inside the photo's clipped box. */
+.listing-status {
+  position: absolute;
+  bottom: var(--space-24);
+  left: var(--space-24);
+}
+
+.listing-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: var(--space-32);
+}
+
+/* body-md */
+.listing-eyebrow {
+  margin-bottom: var(--space-8);
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-secondary);
+}
+
+/* heading-sm */
+.listing-title {
+  font-size: 28px;
+  line-height: 32px;
+}
+
+.listing-dates {
+  margin-top: var(--space-8);
+}
+
+/* body-lg, three lines at most. A pitch's full text is behind Details
+   (opening it lifts the clamp), a trip's on its trip page. */
+.listing-description {
+  display: -webkit-box;
+  margin-top: var(--space-16);
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--type-secondary);
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.listing:has(.pitch-details[open]) .listing-description {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+}
+
+/* Pinned to the bottom of the card, so bars and buttons line up across a
+   row however long the text above runs. */
+.listing-progress {
+  margin-top: auto;
+  padding-top: var(--space-24);
+}
+
+.listing-progress[hidden] {
+  display: none;
+}
+
+/* body-md/mono, ALL CAPS per §1.2. */
+.listing-progress-text {
+  margin-top: var(--space-8);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--type-secondary);
+}
+
+/* A trip without a capacity has no bar, so the count sits right under the
+   padding instead. */
+.listing-progress > .listing-progress-text:first-child {
+  margin-top: 0;
+}
+
+/* body-md */
+.listing-meta {
+  margin-top: var(--space-8);
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--type-secondary);
+}
+
+.listing-meta[hidden] {
+  display: none;
+}
+
+.listing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-16) var(--space-24);
+  margin-top: var(--space-24);
+}
+
+/* A link styled as the grey .auth-button pill. */
+.listing-open {
+  display: inline-block;
+}
+
+/* Pitch details: the facts grid under a "Details" toggle. body-lg */
+.pitch-details summary {
+  display: inline-block;
+  font-size: 16px;
+  line-height: 20px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.pitch-details summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Decoration: the empty alt text keeps the arrow out of what a screen
+   reader announces; <details> already says whether it is open. */
+.pitch-details summary::after {
+  content: " ▸" / "";
+}
+
+.pitch-details[open] summary::after {
+  content: " ▾" / "";
+}
+
+.pitch-details summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+
+/* Interest and Details share a row until Details opens below them. */
+.listing-actions .pitch-details {
+  flex-basis: auto;
+}
+
+.listing-actions .pitch-details[open] {
+  flex-basis: 100%;
+}
+
+/* The pink band after the list. Core Black on Main Accent Pink, 8.29:1;
+   the button keeps its grey fill, like the sign-in banner. */
+.pitch-band {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-16);
+  margin-top: var(--space-64);
+  padding: var(--space-48);
+  border-radius: var(--radius-lg);
+  background: var(--background-accent-pink);
+  color: var(--type-primary);
+}
+
+.pitch-band[hidden],
+.pitch-band-picks[hidden],
+.pitch-band-slack[hidden] {
+  display: none;
+}
+
+/* heading-md */
+.pitch-band h2 {
+  font-size: 32px;
+  line-height: 36px;
+}
+
+/* body-lg */
+.pitch-band p {
+  max-width: 640px;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.pitch-band .pitch-band-picks {
+  font-weight: var(--weight-medium);
+}
+
+.pitch-band-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-16) var(--space-24);
+  margin-top: var(--space-8);
+}
+
+.pitch-band-link,
+.pitch-band-slack a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 .pitch-preview img {
   display: block;
   width: 100%;
@@ -1940,29 +2193,6 @@ footer > span {
 .detail-facts[hidden],
 .detail-facts > div[hidden] {
   display: none;
-}
-
-.pitch-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-16);
-}
-
-/* heading-x-sm */
-.pitch-place {
-  font-size: 24px;
-  line-height: 24px;
-}
-
-/* body-lg */
-.pitch-description {
-  margin-top: var(--space-16);
-  font-size: 16px;
-  line-height: 20px;
-  color: var(--type-secondary);
-  white-space: pre-line;
 }
 
 .pitch-facts {
@@ -2007,15 +2237,10 @@ footer > span {
   display: none;
 }
 
-/* Pinned to the bottom of the card, so buttons line up across a row of
-   cards whatever the descriptions run to. */
-.pitch-progress {
-  margin-top: auto;
-  padding-top: var(--space-24);
-}
-
-/* Pink as a graphic fill, never as text — §3, Light mode. */
-.pitch-track {
+/* The progress bars on the listing cards. Pink as a graphic fill, never as
+   text — §3, Light mode: interest on a pitch. Spots on a confirmed trip take
+   Core Black (.card-bar-solid), matching its firmer outline. */
+.card-track {
   display: block;
   height: var(--space-8);
   overflow: hidden;
@@ -2023,7 +2248,13 @@ footer > span {
   background: var(--background-tertiary);
 }
 
-.pitch-bar {
+/* On the grey pitch card the empty track takes the page colour instead,
+   so it still shows. */
+.listing-pitch .card-track {
+  background: var(--background-primary);
+}
+
+.card-bar {
   display: block;
   width: var(--pct, 0%);
   height: 100%;
@@ -2032,22 +2263,13 @@ footer > span {
   transition: width 0.35s ease;
 }
 
-/* body-md/mono, ALL CAPS per §1.2. */
-.pitch-progress-text {
-  margin-top: var(--space-8);
-  font-family: var(--font-mono);
-  font-size: 14px;
-  line-height: 18px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--type-secondary);
+.card-bar-solid {
+  background: var(--type-primary);
 }
 
 /* The RSVP button's colours and states at the body-lg step: a card holds
    several of these, the trip page only one. */
 .pitch-button {
-  align-self: flex-start;
-  margin-top: var(--space-24);
   padding: var(--space-12) var(--space-24);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -2263,13 +2485,8 @@ footer > span {
     gap: var(--space-16);
   }
 
-  .pitch {
+  .listing-body {
     padding: var(--space-24);
-  }
-
-  .pitch-photo {
-    margin: calc(var(--space-24) * -1) calc(var(--space-24) * -1)
-      var(--space-24);
   }
 }
 
@@ -2344,8 +2561,27 @@ footer > span {
     margin-top: var(--space-24);
   }
 
-  .trip-description {
-    margin-top: var(--space-24);
+  /* How it works stacks: nodes down the left, the line running from each
+     node to the next one below. */
+  .steps {
+    grid-template-columns: 1fr;
+  }
+
+  .step {
+    padding: 0 0 0 var(--space-32);
+  }
+
+  .step:not(:last-child)::after {
+    top: var(--space-16);
+    bottom: calc(var(--space-24) * -1);
+    left: calc(var(--space-8) - 0.5px);
+    right: auto;
+    border-top: 0;
+    border-left: 1px solid var(--stroke-primary);
+  }
+
+  .pitch-band {
+    padding: var(--space-32);
   }
 
   .poll-grid {
@@ -2490,7 +2726,7 @@ footer > span {
   }
 
   .poll-bar,
-  .pitch-bar {
+  .card-bar {
     transition: none;
   }
 }

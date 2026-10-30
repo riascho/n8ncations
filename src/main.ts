@@ -32,6 +32,7 @@ import * as api from "./api/client";
 import { ApiError } from "./api/types";
 import type { ListedCard } from "./dom";
 import { appPath } from "./paths";
+import { picksSummary } from "./poll-picks";
 
 const { usingMock } = api;
 
@@ -205,24 +206,42 @@ function stateLine(message: string): HTMLElement {
   return line;
 }
 
-/* /workations: confirmed trips and open pitches in one "Coming up" grid,
-   then past trips. The cards come from workations.ts and pitches.ts, which
-   cannot import each other, so both responses are fetched here, in
-   parallel, and each module only builds its own cards. One failing still
-   shows the other's cards, with a line saying what is missing. */
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/* Fills one of the "How it works" counts, which stay hidden until their
+   request has succeeded. */
+function showCount(selector: string, text: string): void {
+  const slot = el(selector);
+  if (slot) {
+    slot.textContent = text;
+    slot.hidden = false;
+  }
+}
+
+/* /workations: "How it works", confirmed trips and open pitches in one
+   "Coming up" grid, the band prompting people to pitch, then past trips.
+   The cards come from workations.ts and pitches.ts, which cannot import
+   each other, so the responses are fetched here, in parallel, and each
+   module only builds its own cards. One failing still shows the other's
+   cards, with a line saying what is missing. GET /polls only feeds the
+   band's "most votes so far" line. */
 async function loadComingUp(): Promise<void> {
   const grid = el("[data-coming-up]");
   const past = el("[data-past]");
   const pastCount = el("[data-past-count]");
   const pastSection = past?.closest("section");
-  const slack = el("[data-pitches-slack]");
-  if (!grid || !past || !pastCount || !pastSection || !slack) {
+  const band = el("[data-pitch-band]");
+  const picks = el("[data-pitch-band-picks]");
+  if (!grid || !past || !pastCount || !pastSection || !band || !picks) {
     return;
   }
 
-  const [trips, pitches] = await Promise.allSettled([
+  const [trips, pitches, polls] = await Promise.allSettled([
     api.getWorkations(),
     api.getPitches(),
+    api.getPolls(),
   ]);
   const describe = (error: unknown, fallback: string): string =>
     error instanceof ApiError ? error.message : fallback;
@@ -234,10 +253,25 @@ async function loadComingUp(): Promise<void> {
     return;
   }
 
+  /* At least one request got past n8n's JWT check, so the band can show. */
+  band.hidden = false;
+  if (polls.status === "fulfilled") {
+    const summary = picksSummary(polls.value);
+    if (summary) {
+      picks.textContent = `Most votes so far: ${summary}.`;
+      picks.hidden = false;
+    }
+  }
+
   const cards: ListedCard[] = [];
   const missing: HTMLElement[] = [];
   if (trips.status === "fulfilled") {
-    cards.push(...upcomingTripCards(trips.value.workations));
+    const tripCards = upcomingTripCards(trips.value.workations);
+    cards.push(...tripCards);
+    showCount(
+      "[data-steps-confirmed]",
+      plural(tripCards.length, "confirmed trip", "confirmed trips"),
+    );
     renderPastTrips(past, pastCount, trips.value.workations);
     pastSection.hidden = false;
   } else {
@@ -248,8 +282,21 @@ async function loadComingUp(): Promise<void> {
     );
   }
   if (pitches.status === "fulfilled") {
-    cards.push(...pitchCards(pitches.value.pitches));
-    showSlackChannel(slack, pitches.value.slackChannelUrl);
+    const listed = pitchCards(pitches.value.pitches);
+    cards.push(...listed);
+    /* Cancelled pitches are the "last" ones; the rest are open. */
+    showCount(
+      "[data-steps-pitches]",
+      plural(
+        listed.filter((card) => !card.last).length,
+        "open pitch",
+        "open pitches",
+      ),
+    );
+    const slack = el("[data-pitches-slack]");
+    if (slack) {
+      showSlackChannel(slack, pitches.value.slackChannelUrl);
+    }
   } else {
     missing.push(
       stateLine(describe(pitches.reason, "The pitches could not be loaded.")),
@@ -259,9 +306,7 @@ async function loadComingUp(): Promise<void> {
   grid.replaceChildren(...missing);
   if (cards.length === 0 && missing.length === 0) {
     grid.appendChild(
-      stateLine(
-        "Nothing coming up yet. Pitch a trip, or vote on where we go next.",
-      ),
+      stateLine("Nothing coming up yet. Be the first to pitch a trip."),
     );
   }
   for (const { card } of cards.sort(byStart)) {

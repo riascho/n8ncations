@@ -98,19 +98,15 @@ function byDate(a: Workation, b: Workation, ascending: boolean): number {
 }
 
 /* ----------------------------------------------------------------
-   Preview cards, /workations: confirmed trips in "Coming up", past
-   trips (.trip-compact) in their carousel
+   Preview cards, /workations: confirmed trips in "Coming up" (.listing,
+   the same shape as a pitch card), past trips (.trip-compact) in their
+   carousel
    ---------------------------------------------------------------- */
 
-function buildCard(
-  trip: Workation,
-  past: boolean,
-  first: boolean,
-): HTMLElement {
+/* A compact slide for the past-trips carousel: a quick overview, with the
+   description one click away on the trip page. */
+function buildPastCard(trip: Workation): HTMLElement {
   const card = template("trip-template");
-  /* Past trips are a quick overview, so their slides are smaller and drop
-     the description (see .trip-compact in styles.css). */
-  card.classList.toggle("trip-compact", past);
 
   const titleId = `trip-${trip.workationId}-title`;
   const heading = requireEl(card, ".edition");
@@ -129,14 +125,8 @@ function buildCard(
       showPhoto(photo);
       photo.src = assetPath(trip.imageUrl);
       photo.alt = trip.imageAlt;
-      /* The first confirmed card is the likeliest image above the fold.
-         Past slides mostly start off-screen in their carousel. */
-      if (!past && first) {
-        photo.setAttribute("fetchpriority", "high");
-      }
-      if (past) {
-        photo.loading = "lazy";
-      }
+      /* Past slides mostly start off-screen in their carousel. */
+      photo.loading = "lazy";
     } else {
       photo.remove();
     }
@@ -145,18 +135,88 @@ function buildCard(
   /* The photo label is a capsule, so it is mono ALL CAPS by stylesheet — the
      place name goes in as written. */
   requireEl(card, ".photo-label").textContent = trip.place;
-  /* In "Coming up", the status is what sets a confirmed trip apart from the
-     pitches around it, so it takes the pink fill and the place label on the
-     photo steps down to grey (.trip-in-list): one pink capsule per card. */
-  const status = requireEl(card, ".status");
-  status.textContent = past ? "Past" : "Confirmed";
-  status.classList.toggle("capsule-accent", !past);
-  card.classList.toggle("trip-in-list", !past);
   requireEl(card, ".place").textContent = trip.place;
-  requireEl(card, ".trip-description").textContent = trip.description;
   requireEl(card, ".trip-attendees").textContent = attendeeText(trip);
   renderDateRange(requireEl(card, ".dates"), trip.startDate, trip.endDate);
 
+  return card;
+}
+
+/* "5 of 6 spots taken", or "4 people signed up" without a capacity. The
+   waitlist goes on the meta line underneath instead. */
+function spotsText(trip: Workation): string {
+  const count = trip.attendees;
+  if (trip.capacity !== null) {
+    return `${count} of ${trip.capacity} spots taken`;
+  }
+  if (count === 0) {
+    return "No one has signed up yet";
+  }
+  return count === 1 ? "1 person signed up" : `${count} people signed up`;
+}
+
+/* A confirmed trip in "Coming up". Same shape as a pitch card (.listing),
+   but solid-bordered with a pink "Confirmed" capsule: this one is booked.
+   RSVP lives on the trip page, which the button opens. */
+function buildListingCard(trip: Workation, first: boolean): HTMLElement {
+  const card = template("listing-trip-template");
+
+  const titleId = `trip-${trip.workationId}-title`;
+  const heading = requireEl(card, ".listing-title");
+  heading.id = titleId;
+  card.setAttribute("aria-labelledby", titleId);
+
+  /* The photo box stays when there is no photo, or when its link breaks:
+     its dot grid (.listing-photo-empty) keeps every card the same shape. */
+  const box = requireEl(card, ".listing-photo");
+  const photo = box.querySelector("img");
+  if (photo instanceof HTMLImageElement) {
+    if (trip.imageUrl) {
+      photo.addEventListener("error", () => {
+        photo.remove();
+        box.classList.add("listing-photo-empty");
+      });
+      photo.src = assetPath(trip.imageUrl);
+      photo.alt = trip.imageAlt;
+      /* The first confirmed card is the likeliest image above the fold. */
+      if (first) {
+        photo.setAttribute("fetchpriority", "high");
+      }
+    } else {
+      photo.remove();
+      box.classList.add("listing-photo-empty");
+    }
+  }
+
+  /* textContent throughout: operator-entered Data Table content. */
+  requireEl(card, ".listing-eyebrow").textContent = trip.title;
+  heading.textContent = trip.place;
+  renderDateRange(
+    requireEl(card, ".listing-dates"),
+    trip.startDate,
+    trip.endDate,
+  );
+  requireEl(card, ".listing-description").textContent = trip.description;
+
+  /* Without a capacity there is nothing to fill, so no bar, just the count. */
+  const track = requireEl(card, ".card-track");
+  if (trip.capacity !== null) {
+    const share = Math.min(1, trip.attendees / Math.max(1, trip.capacity));
+    requireEl(card, ".card-bar").style.setProperty(
+      "--pct",
+      `${Math.round(share * 100)}%`,
+    );
+  } else {
+    track.remove();
+  }
+  requireEl(card, ".listing-progress-text").textContent = spotsText(trip);
+
+  const meta = requireEl(card, ".listing-meta");
+  meta.textContent =
+    trip.waitlisted > 0 ? `${trip.waitlisted} on the waitlist` : "";
+  meta.hidden = trip.waitlisted === 0;
+
+  requireEl(card, ".listing-open").setAttribute("href", workationPath(trip));
   return card;
 }
 
@@ -276,7 +336,7 @@ export function upcomingTripCards(workations: Workation[]): ListedCard[] {
     .filter((trip) => !isPast(trip))
     .sort((a, b) => byDate(a, b, true))
     .map((trip, index) => ({
-      card: buildCard(trip, false, index === 0),
+      card: buildListingCard(trip, index === 0),
       startDate: trip.startDate,
       last: false,
     }));
@@ -297,11 +357,7 @@ export function renderPastTrips(
   if (past.length === 0) {
     pastSlot.appendChild(buildEmptyState(upcoming));
   } else {
-    renderCarousel(
-      pastSlot,
-      past.map((trip) => buildCard(trip, true, false)),
-      "past",
-    );
+    renderCarousel(pastSlot, past.map(buildPastCard), "past");
   }
   pastCount.textContent = String(past.length).padStart(2, "0");
 }

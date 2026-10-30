@@ -640,33 +640,40 @@
         </p>
         <button class="auth-button" type="button" data-signin>Sign in</button>
       </section>
-      <!-- /workations (and its alias /pitches): confirmed trips and open
-           pitches in one list, told apart by their status capsule, then past
-           trips. Filled by loadComingUp() in src/main.ts from GET /workations
-           and GET /pitches. -->
+      <!-- /workations (and its alias /pitches): how a trip comes about, then
+           confirmed trips and open pitches in one list, the prompt to pitch,
+           and past trips. Filled by loadComingUp() in src/main.ts from GET
+           /workations, /pitches and /polls. -->
       <div class="page-head wrap" data-only="workations" data-private>
         <h1 class="page-title">n8ncations</h1>
-        <div class="trips-lead">
-          <p class="polls-intro">
-            Confirmed trips and pitches still collecting interest. RSVP to a
-            confirmed trip, or say you’re interested in a pitch so it can go
-            ahead.
-          </p>
-          <a class="button-accent" href="%BASE_URL%pitch">Pitch an n8ncation</a>
-        </div>
-        <!-- The link comes from GET /pitches (slackChannelUrl), so it only
-             shows once that call has succeeded and the variable is set. -->
-        <p class="polls-intro trips-link" data-pitches-slack hidden>
-          Talk trips through in
-          <a target="_blank" rel="noopener noreferrer"
-            >#mission-n8n-workations</a
-          >
-          on Slack. Every new pitch gets its own thread there.
-        </p>
-        <p class="polls-intro trips-link">
-          Not sure where or when?
-          <a href="%BASE_URL%vote">See what people voted for</a>
-        </p>
+        <!-- How a pitch becomes a trip, as what the reader can do at each
+             step: three steps joined like nodes in a workflow. The counts are
+             filled by loadComingUp() and stay hidden until their request
+             succeeds. -->
+        <ol class="steps" aria-label="How it works">
+          <li class="step">
+            <span class="step-label">Pitch</span>
+            <p>
+              Suggest and organize your own trip: pick a place, dates and how
+              many people it needs to go ahead.
+            </p>
+            <p class="step-count" data-steps-pitches hidden></p>
+          </li>
+          <li class="step">
+            <span class="step-label">Interest</span>
+            <p>
+              Show you’re interested in a pitch. If enough people sign up by the
+              deadline, it becomes an official n8ncation.
+            </p>
+          </li>
+          <li class="step">
+            <span class="step-label">n8ncation</span>
+            <p>
+              Get a spot on a confirmed trip, or join the waitlist if it’s full.
+            </p>
+            <p class="step-count" data-steps-confirmed hidden></p>
+          </li>
+        </ol>
       </div>
       <section
         class="coming-up wrap"
@@ -688,6 +695,37 @@
             Loading n8ncations…
           </p>
         </div>
+      </section>
+      <!-- The prompt to pitch, after the list. Hidden until one of the
+           page's requests succeeds; the picks line comes from GET /polls and
+           the Slack line from GET /pitches (slackChannelUrl). -->
+      <section
+        class="pitch-band wrap"
+        data-only="workations"
+        data-private
+        data-pitch-band
+        aria-labelledby="pitch-band-title"
+        hidden
+      >
+        <h2 id="pitch-band-title">Didn’t find anything that fits?</h2>
+        <p>
+          Pitch your own trip. If enough colleagues are in by your deadline, it
+          becomes an n8ncation, with you as the organizer.
+        </p>
+        <p class="pitch-band-picks" data-pitch-band-picks hidden></p>
+        <div class="pitch-band-actions">
+          <a class="auth-button" href="%BASE_URL%pitch">Pitch an n8ncation</a>
+          <a class="pitch-band-link" href="%BASE_URL%vote"
+            >See all votes<span aria-hidden="true"> →</span></a
+          >
+        </div>
+        <p class="pitch-band-slack" data-pitches-slack hidden>
+          Talk it through in
+          <a target="_blank" rel="noopener noreferrer"
+            >#mission-n8n-workations</a
+          >
+          on Slack. Every new pitch gets its own thread there.
+        </p>
       </section>
       <section
         class="about wrap"
@@ -753,13 +791,11 @@
         </p>
         <div class="poll-grid" data-polls hidden></div>
       </section>
-      <!-- One preview card per n8ncation, filled from GET /workations. The
-           heading links through to /n8ncation/<slug> for the full card.
-           Confirmed trips sit in the "Coming up" grid on /workations, next
-           to the pitch cards. Past trips are slides in a carousel and add
-           .trip-compact, which drops the description and status. -->
+      <!-- One compact card per past n8ncation, a slide in the carousel on
+           /workations, filled from GET /workations. The heading links
+           through to /n8ncation/<slug> for the full card. -->
       <template id="trip-template">
-        <article class="trip">
+        <article class="trip trip-compact">
           <div class="trip-photo">
             <img alt="" width="1440" height="960" /><span
               class="photo-label"
@@ -768,26 +804,60 @@
           <div class="trip-details">
             <div class="trip-top">
               <h3 class="edition"><a></a></h3>
-              <span class="status"></span>
             </div>
             <div class="destination">
               <p class="place"></p>
               <p class="dates"></p>
             </div>
-            <p class="trip-description"></p>
             <p class="trip-attendees"></p>
           </div>
         </article>
       </template>
-      <!-- One card per pitch on /workations, filled from GET /pitches. The
-           status capsule says "Pitch" or "Cancelled". The bar is
-           decoration: the text beside it says the same thing. A cancelled
-           pitch swaps the progress and button for the organizer's reason.
-           The organizer's own card gets the edit and cancel controls; the
-           cancel form's label ids are set per card in pitches.ts. -->
+      <!-- "Coming up" on /workations: confirmed trips and pitches share this
+           card shape (.listing), and differ in fill and border
+           (.listing-trip is solid, .listing-pitch dashed on grey). The photo
+           area always shows, with a dot grid when there is no photo, and
+           carries the status capsule. The bars are decoration: the text
+           under each says the same thing. -->
+      <template id="listing-trip-template">
+        <article class="listing listing-trip">
+          <div class="listing-photo">
+            <img
+              alt=""
+              width="1440"
+              height="960"
+              referrerpolicy="no-referrer"
+            />
+            <span class="capsule capsule-accent listing-status">Confirmed</span>
+          </div>
+          <div class="listing-body">
+            <p class="listing-eyebrow"></p>
+            <h3 class="listing-title"></h3>
+            <p class="dates listing-dates"></p>
+            <p class="listing-description"></p>
+            <div class="listing-progress">
+              <span class="card-track" aria-hidden="true"
+                ><span class="card-bar card-bar-solid"></span
+              ></span>
+              <p class="listing-progress-text"></p>
+            </div>
+            <p class="listing-meta"></p>
+            <div class="listing-actions">
+              <a class="auth-button listing-open">See trip and RSVP</a>
+            </div>
+          </div>
+        </article>
+      </template>
+      <!-- One card per pitch in "Coming up", filled from GET /pitches. The
+           status capsule says "Pitch" or "Cancelled". A cancelled pitch swaps
+           the progress, meta line and button for the organizer's reason.
+           Cost, group size, accommodation and the Slack thread sit under
+           Details. The organizer's own card gets the edit and cancel
+           controls; the cancel form's label ids are set per card in
+           pitches.ts. -->
       <template id="pitch-template">
-        <article class="pitch">
-          <div class="pitch-photo">
+        <article class="listing listing-pitch pitch">
+          <div class="listing-photo pitch-photo">
             <img
               alt=""
               width="1440"
@@ -795,87 +865,97 @@
               loading="lazy"
               referrerpolicy="no-referrer"
             />
+            <span class="capsule listing-status pitch-state"></span>
           </div>
-          <div class="pitch-top">
-            <h3 class="pitch-place"></h3>
-            <span class="status pitch-state"></span>
-          </div>
-          <p class="dates pitch-dates"></p>
-          <p class="pitch-description"></p>
-          <dl class="pitch-facts">
-            <div>
-              <dt>Estimated cost</dt>
-              <dd>
-                <span class="pitch-cost"></span>
-                <span class="pitch-includes"></span>
-              </dd>
+          <div class="listing-body">
+            <p class="listing-eyebrow pitch-organizer"></p>
+            <h3 class="listing-title pitch-place"></h3>
+            <p class="dates listing-dates pitch-dates"></p>
+            <p class="listing-description pitch-description"></p>
+            <div class="listing-progress pitch-progress">
+              <span class="card-track" aria-hidden="true"
+                ><span class="card-bar pitch-bar"></span
+              ></span>
+              <p
+                class="listing-progress-text pitch-progress-text"
+                role="status"
+              ></p>
             </div>
-            <div>
-              <dt>Group size</dt>
-              <dd class="pitch-capacity"></dd>
+            <p class="listing-meta pitch-meta"></p>
+            <div class="pitch-cancelled" hidden>
+              <p class="pitch-cancelled-label">Cancelled by the organizer</p>
+              <p class="pitch-cancelled-reason"></p>
             </div>
-            <div data-fact="stay">
-              <dt>Accommodation</dt>
-              <dd>
-                <a target="_blank" rel="noopener noreferrer">See the place</a>
-              </dd>
-            </div>
-            <div data-fact="organizer">
-              <dt>Pitched by</dt>
-              <dd></dd>
-            </div>
-            <div data-fact="slack">
-              <dt>Discussion</dt>
-              <dd>
-                <a target="_blank" rel="noopener noreferrer"
-                  >Open the Slack thread</a
-                >
-              </dd>
-            </div>
-          </dl>
-          <div class="pitch-progress">
-            <span class="pitch-track" aria-hidden="true"
-              ><span class="pitch-bar"></span
-            ></span>
-            <p class="pitch-progress-text" role="status"></p>
-          </div>
-          <div class="pitch-cancelled" hidden>
-            <p class="pitch-cancelled-label">Cancelled by the organizer</p>
-            <p class="pitch-cancelled-reason"></p>
-          </div>
-          <button
-            class="pitch-button"
-            type="button"
-            aria-pressed="false"
-          ></button>
-          <div class="pitch-owner" hidden>
-            <a class="auth-button auth-button-quiet pitch-edit">Edit pitch</a>
-            <button
-              class="auth-button auth-button-quiet pitch-cancel-open"
-              type="button"
-            >
-              Cancel pitch
-            </button>
-          </div>
-          <form class="pitch-cancel" hidden>
-            <div class="field">
-              <label class="field-label">Why are you cancelling?</label>
-              <textarea name="reason" rows="3" required></textarea>
-              <p class="field-hint">
-                Everyone sees this on the card until the interest deadline.
-              </p>
-            </div>
-            <div class="form-actions">
+            <div class="listing-actions">
               <button
-                class="auth-button auth-button-quiet pitch-cancel-keep"
+                class="pitch-button"
+                type="button"
+                aria-pressed="false"
+              ></button>
+              <details class="pitch-details">
+                <summary>Details</summary>
+                <dl class="pitch-facts">
+                  <div>
+                    <dt>Estimated cost</dt>
+                    <dd>
+                      <span class="pitch-cost"></span>
+                      <span class="pitch-includes"></span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Group size</dt>
+                    <dd class="pitch-capacity"></dd>
+                  </div>
+                  <div data-fact="stay">
+                    <dt>Accommodation</dt>
+                    <dd>
+                      <a target="_blank" rel="noopener noreferrer"
+                        >See the place</a
+                      >
+                    </dd>
+                  </div>
+                  <div data-fact="slack">
+                    <dt>Discussion</dt>
+                    <dd>
+                      <a target="_blank" rel="noopener noreferrer"
+                        >Open the Slack thread</a
+                      >
+                    </dd>
+                  </div>
+                </dl>
+              </details>
+            </div>
+            <div class="pitch-owner" hidden>
+              <a class="auth-button auth-button-quiet pitch-edit">Edit pitch</a>
+              <button
+                class="auth-button auth-button-quiet pitch-cancel-open"
                 type="button"
               >
-                Keep pitch
+                Cancel pitch
               </button>
-              <button class="button-accent" type="submit">Cancel pitch</button>
             </div>
-          </form>
-          <p class="pitch-status" role="status"></p>
+            <form class="pitch-cancel" hidden>
+              <div class="field">
+                <label class="field-label">Why are you cancelling?</label>
+                <textarea name="reason" rows="3" required></textarea>
+                <p class="field-hint">
+                  Everyone sees this on the card until the interest deadline.
+                </p>
+              </div>
+              <div class="form-actions">
+                <button
+                  class="auth-button auth-button-quiet pitch-cancel-keep"
+                  type="button"
+                >
+                  Keep pitch
+                </button>
+                <button class="button-accent" type="submit">
+                  Cancel pitch
+                </button>
+              </div>
+            </form>
+            <p class="pitch-status" role="status"></p>
+          </div>
         </article>
       </template>
       <!-- One card per way to take part in "Get involved" on home, filled by
