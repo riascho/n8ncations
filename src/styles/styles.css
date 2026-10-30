@@ -1841,9 +1841,9 @@ footer > span {
    to pitch their own.
    ---------------------------------------------------------------- */
 
-/* How it works: three steps joined like nodes in a workflow. Each node is
-   a Capsule Connector Dot (Core Black); the line between them is
-   Stroke + Crosshairs/Primary, drawn from each node to the next. */
+/* How it works: three steps joined like nodes in a workflow. The nodes
+   go pink, grey, black (pitch, interest, n8ncation); the line between them
+   is Stroke + Crosshairs/Primary, drawn from each node to the next. */
 .steps {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1871,6 +1871,18 @@ footer > span {
   border-radius: var(--radius-full);
   background: var(--capsule-connector-dot);
 }
+
+/* Pitch: Main Accent Pink, as a graphic fill (§3, Light mode). */
+.step:nth-child(1)::before {
+  background: var(--background-accent-pink);
+}
+
+/* Interest: grey, the Gray 40 of the line it sits on. */
+.step:nth-child(2)::before {
+  background: var(--stroke-primary);
+}
+
+/* n8ncation keeps the Core Black connector dot. */
 
 /* The line runs from this node to the next one, across the gap. */
 .step:not(:last-child)::after {
