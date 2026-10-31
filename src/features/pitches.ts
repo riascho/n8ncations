@@ -5,7 +5,8 @@
      "Coming up" grid, next to the confirmed trips, with an "I'm
      interested" toggle and progress towards the pitch's threshold. main.ts
      loads the data and merges the cards. A cancelled pitch stays listed,
-     with the organizer's reason, until its deadline.
+     with the organizer's reason, until its deadline. An expired one stays
+     listed, with its final count, until its start date.
    - /pitches/<pitchId>: the pitch's own page, linked from its card's
      title. It reuses the trip page's markup and adds cost, group size,
      accommodation, the Slack thread, interest, and for the organizer the
@@ -13,8 +14,9 @@
    - /pitch: the form to submit one. The person pitching becomes the
      organizer and counts as the first interested person.
    - /pitch?edit=<pitchId>: the same form, filled in, for the organizer.
-   - /me: the list of pitches you organize, each open one linking to its
-     edit form. main.ts fetches the data and hands it over.
+     Saving an expired pitch, which needs a new deadline, reopens it.
+   - /me: the list of pitches you organize, each open or expired one
+     linking to its edit form. main.ts fetches the data and hands it over.
 
    Nothing here confirms or expires a pitch. A scheduled n8n workflow does
    that once a day (see README → Pitches), so a confirmed pitch simply stops
@@ -97,7 +99,7 @@ interface OwnerControls {
 
 interface PitchView {
   root: HTMLElement;
-  /** The status capsule: "Pitch" or "Cancelled". */
+  /** The status capsule: "Pitch", "Cancelled" or "Expired". */
   state: HTMLElement;
   progressBox: HTMLElement;
   progress: HTMLElement;
@@ -125,31 +127,43 @@ function progressText(pitch: Pitch): string {
 
 /* The deadline, under the bar. It lives here rather than in the capsule: on
    /workations the capsule is what tells a pitch apart from a confirmed trip.
-   The cost is one of the facts on the pitch's page. */
-function metaText(pitch: Pitch): string {
-  return `Closes ${formatDay(pitch.deadline)}`;
+   The cost is one of the facts on the pitch's page. An expired pitch says
+   when it closed, and on its page tells the organizer how to reopen it. */
+function metaText(pitch: Pitch, onPage: boolean): string {
+  if (pitch.status !== "expired") {
+    return `Closes ${formatDay(pitch.deadline)}`;
+  }
+  const closed = `Closed ${formatDay(pitch.deadline)}`;
+  return onPage && pitch.organizedByMe
+    ? `${closed}. Edit it and set a new deadline to reopen it.`
+    : closed;
 }
 
 function renderPitch(v: PitchView): void {
   const { pitch } = v;
   const cancelled = pitch.status === "cancelled";
+  const expired = pitch.status === "expired";
   v.root.classList.toggle("is-cancelled", cancelled);
-  v.state.textContent = cancelled ? "Cancelled" : "Pitch";
+  v.root.classList.toggle("is-expired", expired);
+  v.state.textContent = cancelled ? "Cancelled" : expired ? "Expired" : "Pitch";
+  /* An expired pitch keeps its progress, as the final count. */
   v.progressBox.hidden = cancelled;
   v.meta.hidden = cancelled;
-  v.meta.textContent = metaText(pitch);
+  v.meta.textContent = metaText(pitch, v.controls !== null);
   /* Whoever pitched it counts as the first interested person and goes on
      the trip if it happens, so they get no interest button, on the card or
-     the pitch's page. */
-  v.button.hidden = cancelled || pitch.organizedByMe;
+     the pitch's page. A closed pitch takes no interest either. */
+  v.button.hidden = cancelled || expired || pitch.organizedByMe;
   v.cancelled.hidden = !cancelled;
   v.reason.textContent = pitch.cancelReason;
   /* Only shown to the organizer. Hiding is a convenience, not the check:
-     the workflows refuse an edit or cancel from anyone else. */
+     the workflows refuse an edit or cancel from anyone else. An expired
+     pitch can be edited (to reopen it) but not cancelled. */
   if (v.controls) {
     const canManage = pitch.organizedByMe && !cancelled;
     v.controls.owner.hidden = !canManage || v.confirming;
-    v.controls.cancelForm.hidden = !canManage || !v.confirming;
+    v.controls.cancelOpen.hidden = expired;
+    v.controls.cancelForm.hidden = !canManage || expired || !v.confirming;
     v.controls.cancelSubmit.disabled = v.busy;
   }
 
@@ -524,10 +538,13 @@ export async function mountPitchDetail(root: HTMLElement): Promise<void> {
     return;
   }
 
-  /* Only what /workations lists: open pitches, and cancelled ones until
-     their deadline. A pitch that went ahead is a trip now. */
+  /* What /workations lists: open pitches, cancelled ones until their
+     deadline and expired ones until their start date. Its organizer can
+     always open an expired pitch, to reopen it. A pitch that went ahead is
+     a trip now. */
   const pitch = pitches.find((candidate) => candidate.pitchId === pitchId);
-  if (!pitch || !isListed(pitch)) {
+  const reopenable = pitch?.status === "expired" && pitch.organizedByMe;
+  if (!pitch || !(isListed(pitch) || reopenable)) {
     state.textContent =
       pitch?.status === "confirmed"
         ? "This pitch went ahead. You’ll find the trip under Workations."
@@ -547,7 +564,7 @@ export async function mountPitchDetail(root: HTMLElement): Promise<void> {
   root.hidden = false;
 }
 
-/** Open pitches first, then cancelled ones. Within each, deadline first:
+/** Open pitches first, then closed ones. Within each, deadline first:
     the pitch that closes soonest needs attention first. */
 function byDeadline(a: Pitch, b: Pitch): number {
   const rank = (pitch: Pitch): number => (pitch.status === "open" ? 0 : 1);
@@ -562,19 +579,23 @@ function byDeadline(a: Pitch, b: Pitch): number {
   return ordinal(left) - ordinal(right);
 }
 
-/* /workations lists what everyone gets from GET /pitches: open pitches, and
-   cancelled ones until their deadline. The caller's own closed pitches,
-   which the route also sends, are only for /me. */
+/* /workations lists what everyone gets from GET /pitches: open pitches,
+   cancelled ones until their deadline, so the people interested can read
+   why, and expired ones until their start date, while the organizer can
+   still reopen them. The caller's other closed pitches, which the route
+   also sends, are only for /me. */
 function isListed(pitch: Pitch): boolean {
+  const today = todayIso();
   return (
     pitch.status === "open" ||
-    (pitch.status === "cancelled" && pitch.deadline >= todayIso())
+    (pitch.status === "cancelled" && pitch.deadline >= today) ||
+    (pitch.status === "expired" && pitch.startDate >= today)
   );
 }
 
 /** One card per listed pitch, for the "Coming up" grid on /workations.
     main.ts fetches GET /pitches and merges these with the trip cards by
-    start date; cancelled pitches go after everything else. */
+    start date; cancelled and expired pitches go after everything else. */
 export function pitchCards(pitches: Pitch[]): ListedCard[] {
   return pitches
     .filter(isListed)
@@ -582,7 +603,7 @@ export function pitchCards(pitches: Pitch[]): ListedCard[] {
     .map((pitch) => ({
       card: buildPitchCard(pitch),
       startDate: pitch.startDate,
-      last: pitch.status === "cancelled",
+      last: pitch.status !== "open",
     }));
 }
 
@@ -606,7 +627,8 @@ export function showSlackChannel(
    The same compact rows as "your trips" on that page, from the caller's
    own pitches in GET /pitches, whatever their status. Open ones come first
    and link to their edit form. Closed ones (cancelled, expired, went ahead)
-   are kept for reference, folded away in a quieter list below.
+   are kept for reference, folded away in a quieter list below. Expired ones
+   there still link to their edit form, where a new deadline reopens them.
    ---------------------------------------------------------------- */
 
 /* What a closed pitch's row says after its dates. */
@@ -637,6 +659,10 @@ function buildMyPitchRow(pitch: Pitch): HTMLElement {
       ` · ${progressText(pitch)} · Closes ${formatDay(pitch.deadline)}`,
     );
     action.textContent = "Edit";
+  } else if (pitch.status === "expired") {
+    link.setAttribute("href", editPath(pitch.pitchId));
+    meta.append(dates, ` · ${closedText(pitch)}`);
+    action.textContent = "Reopen";
   } else {
     /* No href: nothing left to edit, so the row is not a link. */
     link.classList.add("is-static");
@@ -720,6 +746,8 @@ interface FormView {
   busy: boolean;
   /** The pitch being edited, from ?edit=, or null for a new pitch. */
   editing: string | null;
+  /** The pitch being edited has expired, so saving it reopens it. */
+  reopening: boolean;
   photo: PhotoCheck;
   preview: HTMLElement;
   previewImage: HTMLImageElement;
@@ -965,7 +993,9 @@ async function submitPitch(v: FormView): Promise<void> {
   try {
     if (editing) {
       await api.updatePitch({ pitchId: editing, ...result });
-      v.status.textContent = "Changes saved. Taking you to the list…";
+      v.status.textContent = v.reopening
+        ? "Your pitch is open again. Taking you to it…"
+        : "Changes saved. Taking you to your pitch…";
     } else {
       await api.createPitch(result);
       v.status.textContent = "Pitch submitted. Taking you to the list…";
@@ -1002,18 +1032,24 @@ function fillForm(form: HTMLFormElement, pitch: Pitch): void {
   input(form, "imageAlt").value = pitch.imageAlt;
 }
 
-/* Swaps the page's texts from "pitch a trip" to "edit your pitch". */
+/* Swaps the page's texts from "pitch a trip" to "edit your pitch", or to
+   "reopen your pitch" for an expired one. */
 function showEditTexts(root: HTMLElement, v: FormView): void {
-  document.title = "Edit your pitch — n8ncation";
-  requireEl(root, "[data-pitch-title]").textContent = "Edit your pitch";
-  requireEl(root, "[data-pitch-intro]").textContent =
-    "Change anything about your pitch. Everyone who registered interest stays counted, so let them know about big changes such as new dates.";
+  document.title = v.reopening
+    ? "Reopen your pitch — n8ncation"
+    : "Edit your pitch — n8ncation";
+  requireEl(root, "[data-pitch-title]").textContent = v.reopening
+    ? "Reopen your pitch"
+    : "Edit your pitch";
+  requireEl(root, "[data-pitch-intro]").textContent = v.reopening
+    ? "Your pitch expired without enough interest. Set a new deadline, and new dates if needed, to open it again. Everyone who registered interest stays counted."
+    : "Change anything about your pitch. Everyone who registered interest stays counted, so let them know about big changes such as new dates.";
   const back = requireEl(root, "[data-pitch-back]");
   back.textContent = "Discard changes";
   if (v.editing) {
     back.setAttribute("href", pitchPath(v.editing));
   }
-  v.submit.textContent = "Save changes";
+  v.submit.textContent = v.reopening ? "Reopen pitch" : "Save changes";
 }
 
 export function mountPitchForm(root: HTMLElement): void {
@@ -1049,6 +1085,7 @@ export function mountPitchForm(root: HTMLElement): void {
     status: requireEl(root, "[data-pitch-status]"),
     busy: false,
     editing: new URLSearchParams(location.search).get("edit"),
+    reopening: false,
     photo: { url: "", state: "none" },
     preview: requireEl(root, "[data-pitch-preview]"),
     previewImage: image(root, "[data-pitch-preview] img"),
@@ -1118,8 +1155,8 @@ function showPicks(root: HTMLElement, picks: string): void {
 /* Editing does need data, the pitch itself, so GET /pitches is both the load
    and the session check. There is no single-pitch route: the list is small
    and already says which pitches are the caller's. The form only shows for
-   an open pitch the caller organizes; POST /pitch-update checks the same
-   thing again. */
+   an open or expired pitch the caller organizes; POST /pitch-update checks
+   the same thing again, and reopens an expired one. */
 async function revealForEditing(
   root: HTMLElement,
   v: FormView,
@@ -1139,12 +1176,14 @@ async function revealForEditing(
     (candidate) =>
       candidate.pitchId === pitchId &&
       candidate.organizedByMe &&
-      candidate.status === "open",
+      (candidate.status === "open" || candidate.status === "expired"),
   );
   if (!pitch) {
-    state.textContent = "You can only edit an open pitch you submitted.";
+    state.textContent =
+      "You can only edit an open or expired pitch you submitted.";
     return;
   }
+  v.reopening = pitch.status === "expired";
   fillForm(v.form, pitch);
   checkPhoto(v);
   showEditTexts(root, v);

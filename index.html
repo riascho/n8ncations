@@ -198,8 +198,9 @@
           <!-- A pitch's page only, in place of the RSVP block: progress
                towards the threshold, the interest button, a cancelled
                pitch's reason, and for the organizer the edit link and
-               cancelling. Wired by mountPitchDetail() in
-               src/features/pitches.ts. -->
+               cancelling. An expired pitch keeps its progress as the final
+               count, without the button or cancelling. Wired by
+               mountPitchDetail() in src/features/pitches.ts. -->
           <div class="detail-pitch" data-detail-pitch hidden>
             <div class="listing-progress pitch-progress">
               <span class="card-track" aria-hidden="true"
@@ -936,8 +937,9 @@
         </article>
       </template>
       <!-- One card per pitch in "Coming up", filled from GET /pitches. The
-           status capsule says "Pitch" or "Cancelled". A cancelled pitch swaps
-           the progress, meta line and button for the organizer's reason.
+           status capsule says "Pitch", "Cancelled" or "Expired". A cancelled
+           pitch swaps the progress, meta line and button for the organizer's
+           reason. An expired one keeps its final count and drops the button.
            Cost, group size, accommodation, the Slack thread and the
            organizer's edit and cancel controls are on the pitch's own page,
            /pitches/<pitchId>, which the title links to. -->
@@ -1034,8 +1036,9 @@
       </template>
       <!-- One row per pitch you organize on /me, filled by renderMyPitches().
            Same row as a trip. An open pitch links to its edit form, and the
-           visible "Edit" is part of the link's name. A cancelled pitch has no
-           href, so it is a plain row carrying the reason. -->
+           visible "Edit" is part of the link's name. An expired pitch links
+           to the same form, labelled "Reopen". Any other closed pitch has no
+           href, so it is a plain row carrying its outcome. -->
       <template id="my-pitch-template">
         <li>
           <a class="my-trip">

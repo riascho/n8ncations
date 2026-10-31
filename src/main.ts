@@ -192,7 +192,7 @@ async function loadMyPitches(): Promise<void> {
 }
 
 /* Soonest first, by start date. YYYY-MM-DD strings sort as dates. Cancelled
-   pitches go after everything else. */
+   and expired pitches go after everything else. */
 function byStart(a: ListedCard, b: ListedCard): number {
   if (a.last !== b.last) {
     return a.last ? 1 : -1;
@@ -292,7 +292,7 @@ async function loadComingUp(): Promise<void> {
   if (pitches.status === "fulfilled") {
     const listed = pitchCards(pitches.value.pitches);
     cards.push(...listed);
-    /* Cancelled pitches are the "last" ones; the rest are open. */
+    /* Cancelled and expired pitches are the "last" ones; the rest are open. */
     showCount(
       "[data-steps-pitches]",
       plural(

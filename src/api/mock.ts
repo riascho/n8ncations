@@ -12,6 +12,7 @@ import type {
   NewPitchResult,
   Pitch,
   PitchesResponse,
+  PitchStatus,
   PitchUpdate,
   PollResult,
   PollsResponse,
@@ -246,8 +247,10 @@ function logisticsKey(workationId: string, sub: string): string {
 /* Stands in for the `pitches` and `pitch_interest` tables. The first is a
    few people short of its threshold, so registering interest moves the bar
    visibly. The demo user pitched the third, so its card shows the edit and
-   cancel controls. The demo user's two closed pitches (one expired, one
-   that became the Roche trip) only show under "your pitches" on /me. */
+   cancel controls. Kraków expired but starts later, so it is still listed
+   with an "Expired" capsule. The demo user's two closed pitches (Tallinn
+   expired after its start date, Roche became a trip) only show under "your
+   pitches" on /me; Tallinn's row there links to the form that reopens it. */
 type PitchRow = Omit<
   Pitch,
   "interested" | "interestedByMe" | "organizedByMe" | "organizer" | "slackUrl"
@@ -352,6 +355,25 @@ const pitchRows: PitchRow[] = [
     organizerSub: "demo-user",
   },
   {
+    pitchId: "p-05",
+    status: "expired",
+    cancelReason: "",
+    place: "Kraków, Poland",
+    startDate: "2027-03-08",
+    endDate: "2027-03-12",
+    description:
+      "A week in a flat near the old town, with a coworking space around the corner.",
+    accommodationUrl: "",
+    imageUrl: "",
+    imageAlt: "",
+    capacity: 8,
+    threshold: 5,
+    deadline: "2026-10-20",
+    costEstimate: 450,
+    costIncludes: "Accommodation and coworking",
+    organizerSub: "seed-4",
+  },
+  {
     pitchId: "p-00",
     status: "confirmed",
     cancelReason: "",
@@ -377,6 +399,7 @@ const interestRows: Record<string, string[]> = {
   "p-02": ["seed-3", "seed-1"],
   "p-03": ["demo-user", "seed-5"],
   "p-04": ["demo-user", "seed-1", "seed-6"],
+  "p-05": ["seed-4", "seed-2"],
   "p-00": ["demo-user", "seed-1", "seed-2", "seed-3", "seed-4"],
 };
 
@@ -573,12 +596,14 @@ export function addPollOption(pollId: string, value: string): Promise<void> {
 export function getPitches(): Promise<PitchesResponse> {
   const user = requireUser();
   const today = todayIso();
-  /* Like the workflow: everyone gets open pitches and cancelled ones until
-     their deadline, and the caller also gets every pitch they organize. */
+  /* Like the workflow: everyone gets open pitches, cancelled ones until
+     their deadline and expired ones until their start date, and the caller
+     also gets every pitch they organize. */
   const listed = pitchRows.filter(
     (row) =>
       row.status === "open" ||
       (row.status === "cancelled" && row.deadline >= today) ||
+      (row.status === "expired" && row.startDate >= today) ||
       row.organizerSub === user.sub,
   );
   return delay({
@@ -620,13 +645,19 @@ function rejectInvalid(pitch: NewPitch): void {
 }
 
 /* The workflows' ownership check: 404 for a pitch that is missing or someone
-   else's, so the answer does not reveal which. 400 once it is closed. */
-function requireOwnOpenPitch(pitchId: string, sub: string): PitchRow {
+   else's, so the answer does not reveal which. 400 unless its status is one
+   of `allowed`: /pitch-cancel takes open pitches only, /pitch-update open
+   and expired ones. */
+function requireOwnPitch(
+  pitchId: string,
+  sub: string,
+  allowed: PitchStatus[],
+): PitchRow {
   const row = pitchRows.find((pitch) => pitch.pitchId === pitchId);
   if (!row || row.organizerSub !== sub) {
     throw new ApiError(404, "We could not find that pitch.");
   }
-  if (row.status !== "open") {
+  if (!allowed.includes(row.status)) {
     throw new ApiError(400, "This pitch is closed.");
   }
   return row;
@@ -659,12 +690,20 @@ export function createPitch(pitch: NewPitch): Promise<NewPitchResult> {
   return delay({ pitchId });
 }
 
-/* Interest is kept: the people already in stay counted after an edit. */
+/* Interest is kept: the people already in stay counted after an edit. Like
+   the workflow, saving an expired pitch reopens it. */
 export function updatePitch(update: PitchUpdate): Promise<void> {
   const user = requireUser();
-  const row = requireOwnOpenPitch(update.pitchId, user.sub);
+  const row = requireOwnPitch(update.pitchId, user.sub, ["open", "expired"]);
   rejectInvalid(update);
+  if (update.deadline < todayIso()) {
+    throw new ApiError(
+      400,
+      "The deadline must be between today and the start date.",
+    );
+  }
   Object.assign(row, {
+    status: "open",
     place: update.place,
     startDate: update.startDate,
     endDate: update.endDate,
@@ -683,7 +722,7 @@ export function updatePitch(update: PitchUpdate): Promise<void> {
 
 export function cancelPitch(pitchId: string, reason: string): Promise<void> {
   const user = requireUser();
-  const row = requireOwnOpenPitch(pitchId, user.sub);
+  const row = requireOwnPitch(pitchId, user.sub, ["open"]);
   if (!reason.trim()) {
     throw new ApiError(400, "Say why you’re cancelling the pitch.");
   }

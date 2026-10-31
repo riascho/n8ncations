@@ -36,7 +36,7 @@ export interface Workation {
   imageUrl: string;
   imageAlt: string;
   /** The following three are copied from the pitch the trip started as, by
-      the "Pitch decisions" workflow, or entered by hand. */
+      the "Date Check & Status Updates" workflow, or entered by hand. */
   /** http(s) link to the place people stay, or "" when none. */
   accommodationUrl: string;
   /** Estimated cost per person in euros, or null when not given. */
@@ -116,14 +116,16 @@ export interface RsvpResult {
 
 /** "cancelled" means the organizer withdrew it, with a reason. "confirmed"
     means it had enough interest and is a trip in GET /workations now;
-    "expired" means its deadline passed without enough. */
+    "expired" means its deadline passed without enough; its organizer can
+    reopen it with POST /pitch-update and a new deadline. */
 export type PitchStatus = "open" | "cancelled" | "confirmed" | "expired";
 
-/** A pitch in GET /pitches. Everyone gets the open pitches, and the
-    cancelled ones whose deadline hasn't passed, so the people interested in
-    one can read why. On top of that, the caller gets every pitch they
-    organize, in any status, for "your pitches" on /me. /pitches shows only the
-    first group (see `isListed` in src/features/pitches.ts). */
+/** A pitch in GET /pitches. Everyone gets the open pitches, the cancelled
+    ones whose deadline hasn't passed, so the people interested in one can
+    read why, and the expired ones whose start date hasn't passed. On top of
+    that, the caller gets every pitch they organize, in any status, for
+    "your pitches" on /me. /workations shows only the first group (see
+    `isListed` in src/features/pitches.ts). */
 export interface Pitch {
   pitchId: string;
   status: PitchStatus;
@@ -201,8 +203,9 @@ export interface NewPitchResult {
 }
 
 /** Body of POST /pitch-update: every field of the pitch, replaced as a
-    whole. Only the organizer of an open pitch may send it; anyone else gets
-    a 404. */
+    whole. Only the organizer of an open or expired pitch may send it;
+    anyone else gets a 404. Saving an expired pitch reopens it (the deadline
+    must be today or later, as for any save). */
 export interface PitchUpdate extends NewPitch {
   pitchId: string;
 }
