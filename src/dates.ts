@@ -123,18 +123,3 @@ export function formatDay(value: string): string {
   const date = parseDate(value);
   return date ? `${date.day} ${monthName(date.month)} ${date.year}` : "";
 }
-
-/** A datetime-local value as "6 November, 14:30", or "" when empty or
-    unparseable. The time is shown as entered: it is the time at the
-    destination, so no timezone conversion applies. */
-export function formatDateTime(value: string | null): string {
-  if (!value) {
-    return "";
-  }
-  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(value);
-  const date = match ? parseDate(match[1]) : null;
-  if (!match || !date) {
-    return "";
-  }
-  return `${date.day} ${monthName(date.month)}, ${match[2]}`;
-}

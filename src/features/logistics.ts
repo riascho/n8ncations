@@ -1,9 +1,10 @@
 /* Private logistics on the trip page, /n8ncation/<slug>.
 
    Two parts, both below the RSVP button:
-   - "Your trip details": a form for your own dietary needs, room preference,
-     travel times and emergency contact. Shown once you have a spot or a
-     place on the waitlist, until the trip ends.
+   - "Your trip details": a form for what's important to you for the trip
+     (free text, so the organizer knows what people hope for), your dietary
+     needs, room preference and emergency contact. Shown once you have a
+     spot or a place on the waitlist, until the trip ends.
    - "Attendees": everyone signed up, with their logistics. Shown only to the
      trip's organizer (me.organizing), past trips included.
 
@@ -20,12 +21,16 @@ import type {
   SignupStatus,
   Workation,
 } from "../api/types";
-import { formatDateTime } from "../dates";
 import { requireEl } from "../dom";
+import { tidyParagraph } from "../format";
 
-/* Data Table String columns carry no length limit of their own, so the cap is
-   ours, and the workflow applies the same one. */
+/* Data Table String columns carry no length limit of their own, so the caps
+   are ours, and the workflow applies the same ones. */
 const MAX_FIELD_LENGTH = 200;
+const MAX_EXPECTATIONS_LENGTH = 500;
+
+/** The one-line fields. `expectations` is the multi-line one. */
+type LineField = Exclude<keyof Logistics, "expectations">;
 
 /** The same fields as DetailState in workations.ts, passed on by main.ts. */
 export interface LogisticsContext {
@@ -38,7 +43,8 @@ export interface LogisticsContext {
 interface FormView {
   root: HTMLElement;
   form: HTMLFormElement;
-  fields: Record<keyof Logistics, HTMLInputElement>;
+  fields: Record<LineField, HTMLInputElement>;
+  expectations: HTMLTextAreaElement;
   save: HTMLButtonElement;
   status: HTMLElement;
   /** The trip the form is loaded for, or null before the first load. */
@@ -62,11 +68,9 @@ let rosterView: RosterView | null = null;
    one after the organizer changes their own RSVP. */
 let rosterLoad = 0;
 
-const FIELD_NAMES: (keyof Logistics)[] = [
+const FIELD_NAMES: LineField[] = [
   "dietary",
   "roomPreference",
-  "arrival",
-  "departure",
   "emergencyContact",
 ];
 
@@ -89,17 +93,21 @@ function tidy(value: string): string | null {
 }
 
 function readForm(v: FormView): Logistics {
+  /* Multi-line, so its line breaks are kept. */
+  const expectations = tidyParagraph(
+    v.expectations.value,
+    MAX_EXPECTATIONS_LENGTH,
+  );
   return {
+    expectations: expectations === "" ? null : expectations,
     dietary: tidy(v.fields.dietary.value),
     roomPreference: tidy(v.fields.roomPreference.value),
-    /* datetime-local values are already canonical, or "" when empty. */
-    arrival: v.fields.arrival.value || null,
-    departure: v.fields.departure.value || null,
     emergencyContact: tidy(v.fields.emergencyContact.value),
   };
 }
 
 function fillForm(v: FormView, logistics: Logistics | null): void {
+  v.expectations.value = logistics?.expectations ?? "";
   for (const name of FIELD_NAMES) {
     v.fields[name].value = logistics?.[name] ?? "";
   }
@@ -112,6 +120,7 @@ function renderForm(v: FormView): void {
   for (const name of FIELD_NAMES) {
     v.fields[name].disabled = !editable;
   }
+  v.expectations.disabled = !editable;
   v.save.disabled = !editable;
   v.root.classList.toggle("is-busy", v.busy);
 }
@@ -141,16 +150,6 @@ async function saveForm(v: FormView): Promise<void> {
     return;
   }
   const logistics = readForm(v);
-  /* Both are YYYY-MM-DDTHH:MM, so string order is time order. */
-  if (
-    logistics.arrival &&
-    logistics.departure &&
-    logistics.departure < logistics.arrival
-  ) {
-    v.status.textContent = "Your departure is before your arrival.";
-    v.fields.departure.focus();
-    return;
-  }
 
   v.busy = true;
   renderForm(v);
@@ -219,14 +218,17 @@ function buildRosterRow(person: RosterEntry): HTMLTableRowElement {
         : `Waitlist #${person.position}`;
   const logistics = person.logistics;
 
+  /* Multi-line: the cell keeps the person's line breaks. */
+  const expectations = cell(logistics?.expectations ?? "");
+  expectations.className = "roster-expectations";
+
   row.append(
     who,
     cell(person.team ?? ""),
     cell(status),
+    expectations,
     cell(logistics?.dietary ?? ""),
     cell(logistics?.roomPreference ?? ""),
-    cell(formatDateTime(logistics?.arrival ?? null)),
-    cell(formatDateTime(logistics?.departure ?? null)),
     cell(logistics?.emergencyContact ?? ""),
   );
   return row;
@@ -278,18 +280,22 @@ export function mountLogistics(
   if (!(form instanceof HTMLFormElement)) {
     throw new Error("Expected the logistics form to be a <form>");
   }
-  const fields = {} as Record<keyof Logistics, HTMLInputElement>;
+  const fields = {} as Record<LineField, HTMLInputElement>;
   for (const name of FIELD_NAMES) {
     const input = form.elements.namedItem(name);
     if (!(input instanceof HTMLInputElement)) {
       throw new Error(`Expected a logistics input named ${name}`);
     }
-    if (input.type === "text") {
-      /* Set here rather than in the markup, so the cap and tidy() agree. */
-      input.maxLength = MAX_FIELD_LENGTH;
-    }
+    /* Set here rather than in the markup, so the cap and tidy() agree. */
+    input.maxLength = MAX_FIELD_LENGTH;
     fields[name] = input;
   }
+  const expectations = form.elements.namedItem("expectations");
+  if (!(expectations instanceof HTMLTextAreaElement)) {
+    throw new Error("Expected a logistics textarea named expectations");
+  }
+  /* Likewise, so the cap and tidyParagraph() agree. */
+  expectations.maxLength = MAX_EXPECTATIONS_LENGTH;
   const save = requireEl(form, "button[type=submit]");
   if (!(save instanceof HTMLButtonElement)) {
     throw new Error("Expected the logistics Save button");
@@ -299,6 +305,7 @@ export function mountLogistics(
     root: formRoot,
     form,
     fields,
+    expectations,
     save,
     status: requireEl(formRoot, "[data-logistics-status]"),
     workationId: null,

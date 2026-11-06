@@ -23,6 +23,17 @@ export function safeUrl(value: string): string | null {
   }
 }
 
+/* Multi-line text keeps its line breaks, unlike the one-line fields. Used
+   for a pitch's description, a cancellation reason and what's important to
+   someone for a trip. The workflows apply the same rules. */
+export function tidyParagraph(value: string, max: number): string {
+  return value
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, max);
+}
+
 /* Stricter, for photo links: the site is served over https, so an http
    image would be blocked as mixed content. This also rules out data: and
    javascript: URLs. */

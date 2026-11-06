@@ -38,7 +38,7 @@ import {
 import { ORGANIZER_CHECKLIST } from "../data/organizer-checklist";
 import { requireEl, template } from "../dom";
 import type { ListedCard } from "../dom";
-import { euros, httpsUrl, safeUrl } from "../format";
+import { euros, httpsUrl, safeUrl, tidyParagraph } from "../format";
 import { appPath, currentAppPath } from "../paths";
 import { picksSummary } from "../poll-picks";
 
@@ -57,16 +57,6 @@ export const PITCH_LIMITS = {
   maxPeople: 100,
   maxCost: 10000,
 } as const;
-
-/* Multi-line text keeps its line breaks, unlike the one-line fields. Used
-   for the pitch description and a cancellation reason. */
-function tidyParagraph(value: string, max: number): string {
-  return value
-    .replace(/[^\S\n]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-    .slice(0, max);
-}
 
 function describe(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {

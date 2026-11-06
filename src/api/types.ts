@@ -224,12 +224,12 @@ export interface PitchCancel {
 /** One person's logistics for one trip. Every field is optional; an empty
     field is null. Seen only by that person and the trip's organizer. */
 export interface Logistics {
+  /** "What's important to you for this trip?", in the person's own words.
+      Multi-line (line breaks kept), up to 500 characters. The others are
+      one line, up to 200. */
+  expectations: string | null;
   dietary: string | null;
   roomPreference: string | null;
-  /** Local date and time as YYYY-MM-DDTHH:MM, the value of a datetime-local
-      input. No timezone: it is the time at the destination. */
-  arrival: string | null;
-  departure: string | null;
   emergencyContact: string | null;
 }
 

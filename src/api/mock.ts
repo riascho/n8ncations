@@ -221,20 +221,19 @@ const logisticsRows = new Map<string, Logistics>([
   [
     "01:seed-1",
     {
+      expectations:
+        "Quiet mornings for focused work.\nOne long hike, and cooking together in the evenings.",
       dietary: "Vegetarian",
       roomPreference: "Happy to share",
-      arrival: "2026-11-06T14:30",
-      departure: "2026-11-13T10:00",
       emergencyContact: "Sam Example, +49 30 1234567",
     },
   ],
   [
     "01:seed-3",
     {
+      expectations: null,
       dietary: null,
       roomPreference: "Single room if possible",
-      arrival: "2026-11-06T18:05",
-      departure: null,
       emergencyContact: null,
     },
   ],

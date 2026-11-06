@@ -10,9 +10,9 @@
 
    Copy follows the Tone of Voice in n8ndesign.md: sentence case, no hype.
    Hints that mention logistics describe what the app does: once a trip is
-   confirmed, attendees fill in their logistics (dietary needs, arrival and
-   departure, emergency contact) and the organizer sees them on the trip
-   page. */
+   confirmed, attendees fill in their logistics (what's important to them,
+   dietary needs, room preference, emergency contact) and the organizer sees
+   them on the trip page. */
 
 export interface ChecklistItem {
   text: string;

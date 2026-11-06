@@ -292,6 +292,22 @@
               anything you don’t want to share.
             </p>
             <form class="logistics-form">
+              <div class="field field-wide">
+                <label class="field-label" for="logistics-expectations"
+                  >What’s important to you for this trip?</label
+                >
+                <textarea
+                  id="logistics-expectations"
+                  name="expectations"
+                  rows="4"
+                  aria-describedby="logistics-expectations-hint"
+                  placeholder="Quiet mornings for focused work, one long hike, cooking together"
+                ></textarea>
+                <p class="field-hint" id="logistics-expectations-hint">
+                  Tell the organizer what you would expect, so they can plan
+                  around it.
+                </p>
+              </div>
               <div class="field">
                 <label class="field-label" for="logistics-dietary"
                   >Dietary needs</label
@@ -314,26 +330,6 @@
                   type="text"
                   autocomplete="off"
                   placeholder="Happy to share"
-                />
-              </div>
-              <div class="field">
-                <label class="field-label" for="logistics-arrival"
-                  >Arrival</label
-                >
-                <input
-                  id="logistics-arrival"
-                  name="arrival"
-                  type="datetime-local"
-                />
-              </div>
-              <div class="field">
-                <label class="field-label" for="logistics-departure"
-                  >Departure</label
-                >
-                <input
-                  id="logistics-departure"
-                  name="departure"
-                  type="datetime-local"
                 />
               </div>
               <div class="field field-wide">
@@ -375,10 +371,9 @@
                     <th scope="col">Name</th>
                     <th scope="col">Team</th>
                     <th scope="col">Status</th>
+                    <th scope="col">What’s important</th>
                     <th scope="col">Dietary needs</th>
                     <th scope="col">Room</th>
-                    <th scope="col">Arrival</th>
-                    <th scope="col">Departure</th>
                     <th scope="col">Emergency contact</th>
                   </tr>
                 </thead>

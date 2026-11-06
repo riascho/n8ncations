@@ -1850,6 +1850,12 @@ footer > span {
   min-width: 120px;
 }
 
+/* Free text with the person's own line breaks; wider so it stays readable. */
+.roster-table .roster-expectations {
+  min-width: 240px;
+  white-space: pre-line;
+}
+
 /* body-md/mono column labels, ALL CAPS per §1.2. */
 .roster-table thead th {
   font-family: var(--font-mono);
