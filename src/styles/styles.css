@@ -1725,7 +1725,8 @@ footer > span {
    ---------------------------------------------------------------- */
 
 .logistics,
-.roster {
+.roster,
+.organizer-checklist {
   margin-top: var(--space-40);
   padding-top: var(--space-32);
   border-top: 1px solid var(--stroke-secondary);
@@ -1733,6 +1734,7 @@ footer > span {
 
 .logistics[hidden],
 .roster[hidden],
+.organizer-checklist[hidden],
 .roster-scroll[hidden] {
   display: none;
 }
@@ -1749,6 +1751,55 @@ footer > span {
   margin-top: var(--space-8);
   font-size: 16px;
   line-height: 20px;
+  color: var(--type-secondary);
+}
+
+/* Pitch page: the organizer's checklist. Same section rhythm as the
+   attendee list; one collapsible category per group, ruled off like a
+   list, with the summary styled like "Closed pitches" on /me. */
+
+.checklist-groups {
+  max-width: 640px;
+  margin-top: var(--space-24);
+  border-bottom: 1px solid var(--stroke-secondary);
+}
+
+.checklist-group {
+  border-top: 1px solid var(--stroke-secondary);
+}
+
+/* body-lg/medium */
+.checklist-group-title {
+  padding: var(--space-12) 0;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.checklist-group-title:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.checklist-items {
+  display: grid;
+  gap: var(--space-8);
+  margin: 0 0 var(--space-16);
+  padding-left: var(--space-24);
+}
+
+/* body-lg, with the hint as body-md on its own line. */
+.checklist-items li {
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.checklist-item-hint {
+  display: block;
+  margin-top: var(--space-4);
+  font-size: 14px;
+  line-height: 18px;
   color: var(--type-secondary);
 }
 
@@ -2409,6 +2460,40 @@ footer > span {
 
 .pitch-page .detail-section-intro {
   margin-top: var(--space-16);
+}
+
+/* The questions to think about before pitching, between the intro and the
+   poll hint. body-lg, secondary like the intro around it. */
+.pitch-guide {
+  max-width: 640px;
+  margin-top: var(--space-16);
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--type-secondary);
+}
+
+.pitch-guide[hidden] {
+  display: none;
+}
+
+/* body-lg/medium, like a checklist category's summary. */
+.pitch-guide summary {
+  padding: var(--space-8) 0;
+  font-weight: var(--weight-medium);
+  color: var(--type-primary);
+  cursor: pointer;
+}
+
+.pitch-guide summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.pitch-guide ul {
+  display: grid;
+  gap: var(--space-4);
+  margin: var(--space-8) 0;
+  padding-left: var(--space-24);
 }
 
 .pitch-form {

@@ -254,6 +254,28 @@
             </form>
             <p class="pitch-status" role="status"></p>
           </div>
+          <!-- A pitch's page only, for its organizer while the pitch is
+               open: things to think about, such as which place to book.
+               Read-only. The categories come from
+               src/data/organizer-checklist.ts and are rendered into the slot
+               as collapsible <details> by mountPitchDetail() in
+               src/features/pitches.ts. -->
+          <section
+            class="organizer-checklist"
+            data-pitch-checklist
+            aria-labelledby="checklist-title"
+            hidden
+          >
+            <h2 class="detail-section-title" id="checklist-title">
+              Choose your own adventure
+            </h2>
+            <p class="detail-section-intro">
+              There’s no single right way to organize an n8ncation. While
+              colleagues register interest, decide what kind of trip you want.
+              Here are a few things to discuss as you plan:
+            </p>
+            <div class="checklist-groups" data-pitch-checklist-groups></div>
+          </section>
           <!-- Shown once you have a spot or a waitlist place, until the trip
                ends. Wired by src/features/logistics.ts. -->
           <section
@@ -491,8 +513,25 @@
           <p class="detail-section-intro" data-pitch-intro>
             Suggest a place and dates. Colleagues can register interest until
             your deadline. If enough people are in, your pitch becomes an
-            n8ncation the next day, with you as the organizer.
+            n8ncation, with you as the organizer.
           </p>
+          <!-- New pitches only: showEditTexts() in src/features/pitches.ts
+               hides it when editing or reopening a pitch. Collapsible and
+               closed at first, like the categories of the organizer
+               checklist on a pitch's page. -->
+          <details class="pitch-guide" data-pitch-guide>
+            <summary>Before you start, a few things to think about</summary>
+            <ul>
+              <li>Where would you like to go?</li>
+              <li>
+                What kind of experience do you want to share with other n8ners?
+              </li>
+              <li>What would you like to do together after work?</li>
+              <li>What do you want to get out of the workation yourself?</li>
+              <li>Which country and dates feel right for you?</li>
+            </ul>
+            <p>You can change all of this later.</p>
+          </details>
           <!-- The most-voted places and months, from GET /polls. Filled by
                showPicks() in src/features/pitches.ts; stays hidden if the
                polls fail to load or nobody has voted. -->

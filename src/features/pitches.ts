@@ -10,9 +10,11 @@
    - /pitches/<pitchId>: the pitch's own page, linked from its card's
      title. It reuses the trip page's markup and adds cost, group size,
      accommodation, the Slack thread, interest, and for the organizer the
-     edit link and cancelling.
-   - /pitch: the form to submit one. The person pitching becomes the
-     organizer and counts as the first interested person.
+     edit link, cancelling and, while it's open, a read-only checklist of
+     things to organize.
+   - /pitch: the form to submit one, with a few questions to think about
+     first. The person pitching becomes the organizer and counts as the
+     first interested person.
    - /pitch?edit=<pitchId>: the same form, filled in, for the organizer.
      Saving an expired pitch, which needs a new deadline, reopens it.
    - /me: the list of pitches you organize, each open or expired one
@@ -33,6 +35,7 @@ import {
   renderDateRange,
   todayIso,
 } from "../dates";
+import { ORGANIZER_CHECKLIST } from "../data/organizer-checklist";
 import { requireEl, template } from "../dom";
 import type { ListedCard } from "../dom";
 import { euros, httpsUrl, safeUrl } from "../format";
@@ -111,6 +114,9 @@ interface PitchView {
   reason: HTMLElement;
   /** On the pitch's page only; null on a card. */
   controls: OwnerControls | null;
+  /** The organizer's checklist, on the pitch's page only; null on a card
+      and for anyone but the organizer. */
+  checklist: HTMLElement | null;
   status: HTMLElement;
   pitch: Pitch;
   busy: boolean;
@@ -139,6 +145,46 @@ function metaText(pitch: Pitch, onPage: boolean): string {
     : closed;
 }
 
+/* The organizer's checklist shows from the moment the pitch is posted, while
+   it's open: a cancelled one is over, and an expired one's meta line already
+   says how to reopen it. */
+function showsChecklist(pitch: Pitch): boolean {
+  return pitch.organizedByMe && pitch.status === "open";
+}
+
+/* One collapsible category per group from src/data/organizer-checklist.ts,
+   all closed at first so the page shows short headings, not every item. A
+   native <details> opens with a click, Enter or Space, with no script. */
+function renderChecklist(section: HTMLElement): void {
+  const slot = requireEl(section, "[data-pitch-checklist-groups]");
+  slot.replaceChildren();
+  for (const group of ORGANIZER_CHECKLIST) {
+    const details = document.createElement("details");
+    details.className = "checklist-group";
+    const title = document.createElement("summary");
+    title.className = "checklist-group-title";
+    title.textContent = group.title;
+    const list = document.createElement("ul");
+    list.className = "checklist-items";
+    for (const item of group.items) {
+      const row = document.createElement("li");
+      const text = document.createElement("span");
+      text.className = "checklist-item-text";
+      text.textContent = item.text;
+      row.appendChild(text);
+      if (item.hint) {
+        const hint = document.createElement("span");
+        hint.className = "checklist-item-hint";
+        hint.textContent = item.hint;
+        row.appendChild(hint);
+      }
+      list.appendChild(row);
+    }
+    details.append(title, list);
+    slot.appendChild(details);
+  }
+}
+
 function renderPitch(v: PitchView): void {
   const { pitch } = v;
   const cancelled = pitch.status === "cancelled";
@@ -165,6 +211,11 @@ function renderPitch(v: PitchView): void {
     v.controls.cancelOpen.hidden = expired;
     v.controls.cancelForm.hidden = !canManage || expired || !v.confirming;
     v.controls.cancelSubmit.disabled = v.busy;
+  }
+  /* Rechecked on every render, so cancelling hides it and a failed cancel
+     brings it back. */
+  if (v.checklist) {
+    v.checklist.hidden = !showsChecklist(pitch);
   }
 
   v.progress.textContent = progressText(pitch);
@@ -343,6 +394,7 @@ function bindPitch(
     cancelled: requireEl(scope, ".pitch-cancelled"),
     reason: requireEl(scope, ".pitch-cancelled-reason"),
     controls: null,
+    checklist: null,
     status: requireEl(scope, ".pitch-status"),
     pitch,
     busy: false,
@@ -557,7 +609,20 @@ export async function mountPitchDetail(root: HTMLElement): Promise<void> {
   requireEl(root, "[data-detail-rsvp]").hidden = true;
   const block = requireEl(root, "[data-detail-pitch]");
   block.hidden = false;
-  bindPitch(block, requireEl(root, "[data-detail-status-label]"), pitch, true);
+  const view = bindPitch(
+    block,
+    requireEl(root, "[data-detail-status-label]"),
+    pitch,
+    true,
+  );
+  /* Only the organizer's page gets the checklist; renderPitch() decides
+     whether it shows. */
+  if (pitch.organizedByMe) {
+    const checklist = requireEl(root, "[data-pitch-checklist]");
+    renderChecklist(checklist);
+    view.checklist = checklist;
+    renderPitch(view);
+  }
 
   state.textContent = "";
   state.hidden = true;
@@ -1050,6 +1115,8 @@ function showEditTexts(root: HTMLElement, v: FormView): void {
     back.setAttribute("href", pitchPath(v.editing));
   }
   v.submit.textContent = v.reopening ? "Reopen pitch" : "Save changes";
+  /* The questions are for deciding what to pitch, already done here. */
+  requireEl(root, "[data-pitch-guide]").hidden = true;
 }
 
 export function mountPitchForm(root: HTMLElement): void {
