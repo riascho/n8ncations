@@ -10,6 +10,7 @@ import type {
   Me,
   NewPitch,
   NewPitchResult,
+  Person,
   Pitch,
   PitchesResponse,
   PitchStatus,
@@ -63,28 +64,62 @@ const suggestedOptions: Record<string, string[]> = {
 const profiles = new Map<string, ProfileUpdate>();
 
 /* The seeded colleagues' Google fields, which the real `profiles` table gets
-   from sign-in. Used to resolve organizers and fill the attendee list. */
-interface Person {
+   from sign-in, plus the team and job title they would set on /me. Used to
+   resolve organizers and fill the attendee lists. Dev has set neither, so
+   the lists' "no team, no job title" path gets exercised. */
+interface SeedPerson {
   name: string;
   email: string;
   team: string | null;
+  jobTitle: string | null;
 }
 
-const people: Record<string, Person> = {
-  "seed-1": { name: "Ada Example", email: "ada@n8n.io", team: "Engineering" },
-  "seed-2": { name: "Ben Example", email: "ben@n8n.io", team: "Design" },
-  "seed-3": { name: "Cleo Example", email: "cleo@n8n.io", team: "Support" },
-  "seed-4": { name: "Dev Example", email: "dev@n8n.io", team: null },
-  "seed-5": { name: "Eli Example", email: "eli@n8n.io", team: "Sales" },
-  "seed-6": { name: "Fay Example", email: "fay@n8n.io", team: "Marketing" },
+const people: Record<string, SeedPerson> = {
+  "seed-1": {
+    name: "Ada Example",
+    email: "ada@n8n.io",
+    team: "Engineering",
+    jobTitle: "Senior Software Engineer",
+  },
+  "seed-2": {
+    name: "Ben Example",
+    email: "ben@n8n.io",
+    team: "Design",
+    jobTitle: "Product Designer",
+  },
+  "seed-3": {
+    name: "Cleo Example",
+    email: "cleo@n8n.io",
+    team: "Support",
+    jobTitle: "Support Engineer",
+  },
+  "seed-4": {
+    name: "Dev Example",
+    email: "dev@n8n.io",
+    team: null,
+    jobTitle: null,
+  },
+  "seed-5": {
+    name: "Eli Example",
+    email: "eli@n8n.io",
+    team: "Sales",
+    jobTitle: null,
+  },
+  "seed-6": {
+    name: "Fay Example",
+    email: "fay@n8n.io",
+    team: "Marketing",
+    jobTitle: "Content Lead",
+  },
   "seed-organizer": {
     name: "Demo Organizer",
     email: "organizer@n8n.io",
     team: "People",
+    jobTitle: "People Partner",
   },
 };
 
-function personFor(sub: string): Person {
+function personFor(sub: string): SeedPerson {
   const seeded = people[sub];
   if (seeded) {
     return seeded;
@@ -95,7 +130,28 @@ function personFor(sub: string): Person {
     name: user?.name ?? "",
     email: user?.email ?? "",
     team: profiles.get(sub)?.team ?? null,
+    jobTitle: profiles.get(sub)?.jobTitle ?? null,
   };
+}
+
+/* Like the workflows: display fields only, and the caller flagged rather
+   than identified by sub. `subs` are already in order. */
+function publicPeople(subs: string[], callerSub: string): Person[] {
+  return subs.map((sub) => {
+    const person = personFor(sub);
+    return {
+      name: person.name,
+      team: person.team,
+      jobTitle: person.jobTitle,
+      isMe: sub === callerSub,
+    };
+  });
+}
+
+function signupSubs(workationId: string, status: SignupStatus): string[] {
+  return signupsFor(workationId)
+    .filter((row) => row.status === status)
+    .map((row) => row.sub);
 }
 
 /* Stands in for the `workations` Data Table. Three rows — two upcoming, one
@@ -108,7 +164,13 @@ function personFor(sub: string): Person {
    attendee list on that trip's page. */
 type WorkationRow = Omit<
   Workation,
-  "attendees" | "waitlisted" | "organizer" | "slackUrl" | "photosUrl"
+  | "attendees"
+  | "waitlisted"
+  | "going"
+  | "waitlist"
+  | "organizer"
+  | "slackUrl"
+  | "photosUrl"
 > & {
   organizerSub: string | null;
 };
@@ -254,7 +316,12 @@ function logisticsKey(workationId: string, sub: string): string {
    pitches" on /me; Tallinn's row there links to the form that reopens it. */
 type PitchRow = Omit<
   Pitch,
-  "interested" | "interestedByMe" | "organizedByMe" | "organizer" | "slackUrl"
+  | "interested"
+  | "interestedPeople"
+  | "interestedByMe"
+  | "organizedByMe"
+  | "organizer"
+  | "slackUrl"
 > & {
   organizerSub: string;
 };
@@ -473,14 +540,14 @@ export function getPolls(): Promise<PollsResponse> {
 }
 
 export function getWorkations(): Promise<WorkationsResponse> {
-  requireUser();
+  const user = requireUser();
   return delay({
     workations: workationRows.map(({ organizerSub, ...row }) => ({
       ...row,
       attendees: goingCount(row.workationId),
-      waitlisted: signupsFor(row.workationId).filter(
-        (signup) => signup.status === "waitlist",
-      ).length,
+      waitlisted: signupSubs(row.workationId, "waitlist").length,
+      going: publicPeople(signupSubs(row.workationId, "going"), user.sub),
+      waitlist: publicPeople(signupSubs(row.workationId, "waitlist"), user.sub),
       organizer: organizerSub ? { name: personFor(organizerSub).name } : null,
       /* Like the workflow: the thread of the pitch the trip started as. */
       slackUrl: slackThreads[pitchOfTrip[row.workationId] ?? ""] ?? "",
@@ -648,6 +715,7 @@ export function getPitches(): Promise<PitchesResponse> {
       return {
         ...row,
         interested: interested.length,
+        interestedPeople: publicPeople(interested, user.sub),
         interestedByMe: interested.includes(user.sub),
         organizedByMe: organizerSub === user.sub,
         organizer: { name: personFor(organizerSub).name },

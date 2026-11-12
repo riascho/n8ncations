@@ -53,12 +53,17 @@ export interface Workation {
       only past trips have one. The photos themselves come from GET
       /trip-photos. */
   photosUrl: string;
-  /** How many people have a confirmed spot. Counts only, never who. */
+  /** How many people have a confirmed spot. Always `going.length`. */
   attendees: number;
   /** Spots on the trip, or null when there is no limit. */
   capacity: number | null;
-  /** How many people are waiting for a spot to free up. */
+  /** How many people are waiting for a spot to free up. Always
+      `waitlist.length`. */
   waitlisted: number;
+  /** Who has a spot, in sign-up order. */
+  going: Person[];
+  /** Who is waiting for a spot, in waitlist order: index 0 is next. */
+  waitlist: Person[];
   /** Who runs the trip, or null when nobody is named. The workflow resolves
       the `organizer` sub against `profiles` and sends display fields only:
       every signed-in colleague gets the same list, so never the sub and never
@@ -69,6 +74,21 @@ export interface Workation {
 /** Display fields for a trip's organizer. Only `name` is read. */
 export interface Organizer {
   name: string;
+}
+
+/** Someone going on, waitlisted for, or interested in a trip. Every
+    signed-in colleague gets these lists, so display fields only: never the
+    sub and never the email. */
+export interface Person {
+  /** From Google, as on the profile. Can be "" for an odd account. */
+  name: string;
+  /** From the person's profile on /me, or null when unset. */
+  team: string | null;
+  jobTitle: string | null;
+  /** True for the caller: the UI says "You", and finds its own entry to
+      update optimistically. A flag rather than the sub, like
+      `organizedByMe`. */
+  isMe: boolean;
 }
 
 export interface WorkationsResponse {
@@ -98,9 +118,9 @@ export interface Me {
   jobTitle: string | null;
   /** pollId -> the option values this person selected. */
   votes: Record<string, string[]>;
-  /** workationIds this person has RSVP'd to. Own state belongs on /me for the
-      same reason votes do: GET /workations is the same for everyone and
-      returns counts only, so it can never say who is going. */
+  /** workationIds this person has a spot on. GET /workations also marks the
+      caller in each trip's lists (`Person.isMe`), but /me holds the whole
+      picture in one place: spots, waitlist positions and organizing. */
   signups: string[];
   /** Trips this person is waiting for a spot on, with their place in line. */
   waitlist: WaitlistEntry[];
@@ -174,8 +194,12 @@ export interface Pitch {
   costEstimate: number | null;
   /** What the estimate covers, or "" when not given. */
   costIncludes: string;
-  /** How many people have registered interest. */
+  /** How many people have registered interest. Always
+      `interestedPeople.length`. */
   interested: number;
+  /** Who registered interest, oldest first: the order spots go in if the
+      pitch becomes a trip. */
+  interestedPeople: Person[];
   /** Whether the caller has registered interest. Per caller, unlike
       GET /workations: it saves /pitches a GET /me for one boolean. */
   interestedByMe: boolean;

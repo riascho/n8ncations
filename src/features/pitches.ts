@@ -40,6 +40,13 @@ import { requireEl, template } from "../dom";
 import type { ListedCard } from "../dom";
 import { euros, httpsUrl, safeUrl, tidyParagraph } from "../format";
 import { appPath, currentAppPath } from "../paths";
+import {
+  hidePeopleSection,
+  namesSentence,
+  renderPeopleSection,
+  selfPerson,
+  withoutMe,
+} from "../people";
 import { picksSummary } from "../poll-picks";
 
 /* Limits shared with the validation in the /pitch, /pitch-update and
@@ -97,6 +104,12 @@ interface PitchView {
   progressBox: HTMLElement;
   progress: HTMLElement;
   bar: HTMLElement;
+  /** "You, Ada and 1 more person are interested", on a card only. The
+      pitch's page lists everyone in full instead (`page`). */
+  people: HTMLElement | null;
+  /** The pitch's page, which holds the "Who's interested" section; null on
+      a card. */
+  page: HTMLElement | null;
   /** "Closes 15 December 2026". */
   meta: HTMLElement;
   button: HTMLButtonElement;
@@ -211,6 +224,25 @@ function renderPitch(v: PitchView): void {
   v.progress.textContent = progressText(pitch);
   const share = Math.min(1, pitch.interested / Math.max(1, pitch.threshold));
   v.bar.style.setProperty("--pct", `${Math.round(share * 100)}%`);
+  /* Who's interested: a sentence on a card, everyone in full on the page.
+     A cancelled pitch shows neither, as it hides its progress. */
+  if (v.people) {
+    v.people.textContent =
+      namesSentence(pitch.interestedPeople, "interested") ??
+      "No one is interested yet";
+    v.people.hidden = cancelled;
+  }
+  if (v.page) {
+    if (cancelled) {
+      hidePeopleSection(v.page);
+    } else {
+      renderPeopleSection(v.page, {
+        title: "Who’s interested",
+        people: pitch.interestedPeople,
+        emptyText: "No one has registered interest yet.",
+      });
+    }
+  }
   v.button.setAttribute(
     "aria-pressed",
     pitch.interestedByMe ? "true" : "false",
@@ -233,11 +265,16 @@ async function toggleInterest(v: PitchView): Promise<void> {
 
   const was = v.pitch.interestedByMe;
   const previousCount = v.pitch.interested;
+  const previousPeople = v.pitch.interestedPeople;
 
   /* Optimistic, locked while in flight and rolled back on failure, like an
-     RSVP: pitch_interest has the same non-atomic upsert. */
+     RSVP: pitch_interest has the same non-atomic upsert. New interest goes
+     to the end of the list, as the newest. */
   v.pitch.interestedByMe = !was;
   v.pitch.interested = Math.max(0, previousCount + (was ? -1 : 1));
+  v.pitch.interestedPeople = was
+    ? withoutMe(previousPeople)
+    : [...withoutMe(previousPeople), selfPerson(null)];
   v.busy = true;
   renderPitch(v);
 
@@ -251,6 +288,7 @@ async function toggleInterest(v: PitchView): Promise<void> {
   } catch (error) {
     v.pitch.interestedByMe = was;
     v.pitch.interested = previousCount;
+    v.pitch.interestedPeople = previousPeople;
     v.busy = false;
     renderPitch(v);
     v.status.textContent = describe(error, "Your interest could not be saved.");
@@ -379,6 +417,8 @@ function bindPitch(
     progressBox: requireEl(scope, ".pitch-progress"),
     progress: requireEl(scope, ".pitch-progress-text"),
     bar: requireEl(scope, ".pitch-bar"),
+    people: scope.querySelector<HTMLElement>(".pitch-people"),
+    page: null,
     meta: requireEl(scope, ".pitch-meta"),
     button: button(scope, ".pitch-button"),
     cancelled: requireEl(scope, ".pitch-cancelled"),
@@ -605,14 +645,15 @@ export async function mountPitchDetail(root: HTMLElement): Promise<void> {
     pitch,
     true,
   );
-  /* Only the organizer's page gets the checklist; renderPitch() decides
-     whether it shows. */
+  /* The page lists who's interested in full. Only the organizer's page
+     gets the checklist; renderPitch() decides whether each shows. */
+  view.page = root;
   if (pitch.organizedByMe) {
     const checklist = requireEl(root, "[data-pitch-checklist]");
     renderChecklist(checklist);
     view.checklist = checklist;
-    renderPitch(view);
   }
+  renderPitch(view);
 
   state.textContent = "";
   state.hidden = true;

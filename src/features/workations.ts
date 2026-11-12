@@ -21,6 +21,12 @@ import type { ListedCard } from "../dom";
 import { euros, safeUrl } from "../format";
 import { appPath, assetPath, currentAppPath } from "../paths";
 import {
+  namesSentence,
+  renderPeopleSection,
+  selfPerson,
+  withoutMe,
+} from "../people";
+import {
   monthName,
   ordinal,
   parseDate,
@@ -137,6 +143,12 @@ function buildPastCard(trip: Workation): HTMLElement {
   requireEl(card, ".photo-label").textContent = trip.place;
   requireEl(card, ".place").textContent = trip.place;
   requireEl(card, ".trip-attendees").textContent = attendeeText(trip);
+  /* "Ada, Ben and 3 more people went". Left out when nobody signed up: the
+     count above already says so. */
+  const people = requireEl(card, ".trip-people");
+  const names = namesSentence(trip.going, "went");
+  people.textContent = names ?? "";
+  people.hidden = names === null;
   renderDateRange(requireEl(card, ".dates"), trip.startDate, trip.endDate);
   linkPhotoFolder(card, trip);
 
@@ -237,14 +249,20 @@ function buildListingCard(
   }
   const bar = card.querySelector<HTMLElement>(".card-bar");
   const progress = requireEl(card, ".listing-progress-text");
+  const people = requireEl(card, ".listing-people");
   const meta = requireEl(card, ".listing-meta");
-  /* Repainted after every RSVP, which moves the counts. */
+  /* Repainted after every RSVP, which moves the counts and the names. */
   const renderCounts = (): void => {
     if (bar && trip.capacity !== null) {
       const share = Math.min(1, trip.attendees / Math.max(1, trip.capacity));
       bar.style.setProperty("--pct", `${Math.round(share * 100)}%`);
     }
     progress.textContent = spotsText(trip);
+    /* Only the people going: the waitlist stays a count on the card, and
+       is listed in full on the trip page. */
+    const names = namesSentence(trip.going, "going");
+    people.textContent = names ?? "";
+    people.hidden = names === null;
     meta.textContent =
       trip.waitlisted > 0 ? `${trip.waitlisted} on the waitlist` : "";
     meta.hidden = trip.waitlisted === 0;
@@ -272,6 +290,7 @@ function buildListingCard(
     signup: me.signups.includes(id) ? "going" : waiting ? "waitlist" : null,
     position: waiting?.position ?? null,
     organizing: me.organizing.includes(id),
+    me,
     known: true,
     busy: false,
     edits: 0,
@@ -548,6 +567,9 @@ interface DetailView {
   /** Place in line while `signup` is "waitlist". */
   position: number | null;
   organizing: boolean;
+  /** The reader's GET /me, once it has loaded: gives the reader's own
+      entry in the lists its team and job title when they RSVP. */
+  me: Me | null;
   /** Whether GET /me has said where the reader stands. Until then the button
       stays hidden: it can't yet tell the organizer, who gets none, from
       everyone else. A card gets /me with the list, so it starts known. */
@@ -617,6 +639,8 @@ async function toggleRsvp(v: DetailView): Promise<void> {
     position: v.position,
     attendees: v.trip.attendees,
     waitlisted: v.trip.waitlisted,
+    going: v.trip.going,
+    waitlist: v.trip.waitlist,
   };
   const joining = before.signup === null;
 
@@ -627,20 +651,34 @@ async function toggleRsvp(v: DetailView): Promise<void> {
 
      The guess mirrors the workflow: a spot while there is room, otherwise
      the waitlist. Giving up a spot hands it to the first person waiting, so
-     the spot count stays and the waitlist shrinks instead. */
+     the spot count stays and the waitlist shrinks instead. The lists of
+     names follow the counts, and are replaced rather than changed in place,
+     so `before` keeps the originals for the rollback. */
   if (joining) {
     v.signup = isFull(v.trip) ? "waitlist" : "going";
     v.position = v.signup === "waitlist" ? before.waitlisted + 1 : null;
+    const me = selfPerson(v.me);
     if (v.signup === "going") {
       v.trip.attendees += 1;
+      v.trip.going = [...withoutMe(before.going), me];
     } else {
       v.trip.waitlisted += 1;
+      v.trip.waitlist = [...withoutMe(before.waitlist), me];
     }
   } else {
-    if (before.signup === "waitlist" || before.waitlisted > 0) {
+    if (before.signup === "waitlist") {
       v.trip.waitlisted = Math.max(0, before.waitlisted - 1);
+      v.trip.waitlist = withoutMe(before.waitlist);
+    } else if (before.waitlisted > 0) {
+      v.trip.waitlisted = Math.max(0, before.waitlisted - 1);
+      const [next, ...rest] = before.waitlist;
+      v.trip.going = next
+        ? [...withoutMe(before.going), next]
+        : withoutMe(before.going);
+      v.trip.waitlist = rest;
     } else {
       v.trip.attendees = Math.max(0, before.attendees - 1);
+      v.trip.going = withoutMe(before.going);
     }
     v.signup = null;
     v.position = null;
@@ -657,6 +695,13 @@ async function toggleRsvp(v: DetailView): Promise<void> {
       const toWaitlist = result.status === "waitlist";
       v.trip.attendees += toWaitlist ? -1 : 1;
       v.trip.waitlisted += toWaitlist ? 1 : -1;
+      const me = selfPerson(v.me);
+      v.trip.going = toWaitlist
+        ? withoutMe(v.trip.going)
+        : [...withoutMe(v.trip.going), me];
+      v.trip.waitlist = toWaitlist
+        ? [...withoutMe(v.trip.waitlist), me]
+        : withoutMe(v.trip.waitlist);
       v.signup = result.status;
     }
     if (joining && result) {
@@ -675,6 +720,8 @@ async function toggleRsvp(v: DetailView): Promise<void> {
     v.position = before.position;
     v.trip.attendees = before.attendees;
     v.trip.waitlisted = before.waitlisted;
+    v.trip.going = before.going;
+    v.trip.waitlist = before.waitlist;
     v.busy = false;
     renderRsvp(v);
     v.status.textContent = describe(error, "Your RSVP could not be saved.");
@@ -842,6 +889,31 @@ async function showTripPhotos(
   show(0);
 }
 
+/* Everyone signed in sees who's going, with the waitlist in order
+   underneath, or who went once the trip is over. The organizer also gets
+   the private attendee list with everyone's logistics (logistics.ts). */
+function renderTripPeople(
+  root: HTMLElement,
+  trip: Workation,
+  past: boolean,
+): void {
+  renderPeopleSection(
+    root,
+    past
+      ? {
+          title: "Who went",
+          people: trip.going,
+          emptyText: "No one signed up for this n8ncation.",
+        }
+      : {
+          title: "Who’s going",
+          people: trip.going,
+          emptyText: "No one has signed up yet.",
+          waitlist: trip.waitlist,
+        },
+  );
+}
+
 /** Reads the slug off /n8ncation/<slug>. The "/n8ncation/" prefix also
     appears in the inline script in index.html that picks this view. */
 function slugFromLocation(): string {
@@ -901,6 +973,7 @@ export async function mountWorkationDetail(
     /* Nothing to sign up for. The count stays, because who came is the
        interesting part of a trip that already happened. */
     attendees.textContent = attendeeText(trip);
+    renderTripPeople(root, trip, true);
     button?.remove();
     status.textContent = "This n8ncation has already happened.";
     /* The organizer can still look back at who came. */
@@ -926,6 +999,7 @@ export async function mountWorkationDetail(
     root: rsvp,
     renderCounts: () => {
       attendees.textContent = attendeeText(trip);
+      renderTripPeople(root, trip, false);
     },
     button,
     status,
@@ -933,6 +1007,8 @@ export async function mountWorkationDetail(
     signup: null,
     position: null,
     organizing: false,
+    /* Set by refreshRsvp(). */
+    me: null,
     /* Shown once refreshRsvp() has heard from GET /me. */
     known: false,
     busy: false,
@@ -950,10 +1026,10 @@ export async function mountWorkationDetail(
   await refreshRsvp();
 }
 
-/* Whether you are already on the list is your own state, so it comes from /me
-   rather than from the trip list, which returns counts only. Called after
-   the card is already on screen, so the trip details never wait on a second
-   request. */
+/* Whether you are already on the list, your place in line and whether you
+   organize the trip come from /me, which holds all of the reader's own
+   state in one place. Called after the card is already on screen, so the
+   trip details never wait on a second request. */
 async function refreshRsvp(): Promise<void> {
   const view = detail;
   if (!view) {
@@ -978,6 +1054,7 @@ async function refreshRsvp(): Promise<void> {
     const me = await api.getMe();
     const id = view.trip.workationId;
     view.organizing = me.organizing.includes(id);
+    view.me = me;
     view.known = true;
     if (!view.busy && view.edits === startedAt) {
       const waiting = me.waitlist.find((entry) => entry.workationId === id);

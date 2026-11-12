@@ -286,6 +286,35 @@
             </form>
             <p class="pitch-status" role="status"></p>
           </div>
+          <!-- Everyone signed in sees who's going (or went), with the
+               waitlist in order underneath, on a trip's page, and who's
+               interested on a pitch's page: name, job title and team, from
+               GET /workations or GET /pitches. Filled by
+               renderPeopleSection() in src/people.ts, and repainted after
+               every RSVP or interest change. -->
+          <section
+            class="people"
+            data-people
+            aria-labelledby="people-title"
+            hidden
+          >
+            <h2
+              class="detail-section-title"
+              id="people-title"
+              data-people-title
+            ></h2>
+            <p class="people-empty" data-people-empty hidden></p>
+            <ul class="people-list" data-people-going></ul>
+            <div class="people-waitlist" data-people-waitlist hidden>
+              <h3 class="people-subtitle" id="people-waitlist-title">
+                Waitlist
+              </h3>
+              <ol
+                class="people-list"
+                aria-labelledby="people-waitlist-title"
+              ></ol>
+            </div>
+          </section>
           <!-- A pitch's page only, for its organizer while the pitch is
                open: things to think about, such as which place to book.
                Read-only. The categories come from
@@ -959,6 +988,8 @@
               <p class="dates"></p>
             </div>
             <p class="trip-attendees"></p>
+            <!-- "Ada, Ben and 3 more people went". -->
+            <p class="listing-people trip-people"></p>
             <p class="trip-photos-link" hidden>
               <a target="_blank" rel="noopener noreferrer"
                 >Open the photo folder</a
@@ -996,6 +1027,8 @@
               ></span>
               <p class="listing-progress-text"></p>
             </div>
+            <!-- "Ada, Ben and 3 more people are going". -->
+            <p class="listing-people"></p>
             <p class="listing-meta"></p>
             <!-- RSVP right on the card, with the same toggle as the trip
                  page: "Count me in", "You're going", "Join the waitlist" or
@@ -1044,6 +1077,8 @@
                 role="status"
               ></p>
             </div>
+            <!-- "You, Ada and 1 more person are interested". -->
+            <p class="listing-people pitch-people"></p>
             <p class="listing-meta pitch-meta"></p>
             <div class="pitch-cancelled" hidden>
               <p class="pitch-cancelled-label">Cancelled by the organizer</p>
