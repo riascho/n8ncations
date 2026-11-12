@@ -18,6 +18,7 @@ import type {
   ProfileUpdate,
   RosterResponse,
   RsvpResult,
+  TripPhotosResponse,
   WorkationsResponse,
 } from "./types";
 import { getToken } from "../auth";
@@ -265,4 +266,16 @@ export function getRoster(workationId: string): Promise<RosterResponse> {
   }
   const query = new URLSearchParams({ workationId });
   return request<RosterResponse>(`/roster?${query}`, {}, true);
+}
+
+/* Only for a trip with a photosUrl. The photos arrive inline as data: URLs,
+   so this stays a plain JSON request like every other route. */
+export function getTripPhotos(
+  workationId: string,
+): Promise<TripPhotosResponse> {
+  if (usingMock) {
+    return mock.getTripPhotos(workationId);
+  }
+  const query = new URLSearchParams({ workationId });
+  return request<TripPhotosResponse>(`/trip-photos?${query}`, {}, true);
 }

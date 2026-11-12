@@ -138,8 +138,22 @@ function buildPastCard(trip: Workation): HTMLElement {
   requireEl(card, ".place").textContent = trip.place;
   requireEl(card, ".trip-attendees").textContent = attendeeText(trip);
   renderDateRange(requireEl(card, ".dates"), trip.startDate, trip.endDate);
+  linkPhotoFolder(card, trip);
 
   return card;
+}
+
+/* A trip has a photosUrl once its Drive folder is open to everyone at
+   n8n.io, the morning after it ends. Its past card links to the folder, and
+   its page steps through the photos (showTripPhotos, further down). */
+function linkPhotoFolder(card: HTMLElement, trip: Workation): void {
+  const folderUrl = trip.photosUrl ? safeUrl(trip.photosUrl) : null;
+  if (!folderUrl) {
+    return;
+  }
+  const linkLine = requireEl(card, ".trip-photos-link");
+  requireEl(linkLine, "a").setAttribute("href", folderUrl);
+  linkLine.hidden = false;
 }
 
 /* "5 of 6 spots taken", or "4 people signed up" without a capacity. The
@@ -702,6 +716,13 @@ function fillFacts(root: HTMLElement, trip: Workation): void {
   }
   slack.hidden = threadUrl === null;
 
+  const photos = requireEl(facts, "[data-detail-fact=photos]");
+  const folderUrl = trip.photosUrl ? safeUrl(trip.photosUrl) : null;
+  if (folderUrl) {
+    requireEl(photos, "a").setAttribute("href", folderUrl);
+  }
+  photos.hidden = folderUrl === null;
+
   facts.hidden = false;
 }
 
@@ -742,6 +763,83 @@ function fillDetail(root: HTMLElement, trip: Workation, past: boolean): void {
       photo.remove();
     }
   }
+}
+
+/* The page's photo steps through the trip's photos once its Drive folder is
+   open to n8n.io (trip.photosUrl): the cover first, then up to eight from
+   the folder, with an arrow on either side. The folder is private to
+   n8n.io, so the browser can't load Drive images itself: GET /trip-photos
+   sends them inline as data: URLs. Anything that goes wrong leaves the cover
+   as it was: the photos are a bonus, not something to show an error for. */
+async function showTripPhotos(
+  root: HTMLElement,
+  trip: Workation,
+): Promise<void> {
+  if (!trip.photosUrl) {
+    return;
+  }
+  let photos: string[];
+  try {
+    const response = await api.getTripPhotos(trip.workationId);
+    photos = response.photos
+      .map((photo) => photo.src)
+      /* Only inline images, as the contract says: never a URL the browser
+         would go and fetch from somewhere else. */
+      .filter(
+        (src) => typeof src === "string" && src.startsWith("data:image/"),
+      );
+  } catch {
+    return;
+  }
+  if (photos.length === 0) {
+    return;
+  }
+
+  const frame = requireEl(root, ".detail-photo");
+  /* The cover leads, if it loaded. fillDetail removes the img when the trip
+     has no cover, and showPhoto() removes it when the link is broken, so in
+     both cases a fresh one goes in, under the label and the arrows. */
+  const slides: { src: string; alt: string }[] = [];
+  let image = frame.querySelector("img");
+  if (image && trip.imageUrl) {
+    slides.push({ src: image.src, alt: image.alt });
+  } else {
+    image = document.createElement("img");
+    image.width = 1440;
+    image.height = 960;
+    frame.prepend(image);
+  }
+  const shown = image;
+  for (const src of photos) {
+    slides.push({ src, alt: "" });
+  }
+
+  let index = 0;
+  const show = (next: number): void => {
+    index = (next + slides.length) % slides.length;
+    const slide = slides[index];
+    if (!slide) {
+      return;
+    }
+    shown.src = slide.src;
+    /* Drive file names say nothing ("IMG_2041.jpg"), so the photos are
+       described by where they sit. The cover keeps its own alt text. */
+    shown.alt =
+      slide.alt || `Photo ${index + 1} of ${slides.length} from ${trip.title}`;
+  };
+
+  const previous = requireEl(frame, "[data-photo-prev]");
+  const next = requireEl(frame, "[data-photo-next]");
+  previous.addEventListener("click", () => {
+    show(index - 1);
+  });
+  next.addEventListener("click", () => {
+    show(index + 1);
+  });
+  /* A single photo needs no stepping. */
+  previous.hidden = slides.length < 2;
+  next.hidden = slides.length < 2;
+  show(0);
 }
 
 /** Reads the slug off /n8ncation/<slug>. The "/n8ncation/" prefix also
@@ -791,6 +889,8 @@ export async function mountWorkationDetail(
   state.textContent = "";
   state.hidden = true;
   root.hidden = false;
+  /* Not awaited: the RSVP and attendee list don't wait for the photos. */
+  void showTripPhotos(root, trip);
 
   const rsvp = requireEl(root, "[data-detail-rsvp]");
   const button = root.querySelector("[data-detail-button]");

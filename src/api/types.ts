@@ -47,6 +47,12 @@ export interface Workation {
       it has none (made by hand, or pitched before the Slack bot). GET
       /workations finds the pitch whose `workation_id` is this trip's. */
   slackUrl: string;
+  /** Link to the trip's shared Google Drive folder of photos and videos, or
+      "" until everyone at n8n.io can open it. The "Trip Drive Folders"
+      workflow opens it up the morning after the trip ends, so in practice
+      only past trips have one. The photos themselves come from GET
+      /trip-photos. */
+  photosUrl: string;
   /** How many people have a confirmed spot. Counts only, never who. */
   attendees: number;
   /** Spots on the trip, or null when there is no limit. */
@@ -67,6 +73,20 @@ export interface Organizer {
 
 export interface WorkationsResponse {
   workations: Workation[];
+}
+
+/** GET /trip-photos?workationId=: up to eight photos from the trip's Drive
+    folder, oldest first. The folder is private to n8n.io, so the browser
+    can't load Drive images itself: n8n fetches small thumbnails with its
+    own Drive credential and sends them inline. 404 while the trip has no
+    `photosUrl`. */
+export interface TripPhotosResponse {
+  photos: TripPhoto[];
+}
+
+export interface TripPhoto {
+  /** Always a `data:image/…` URL, about 640px on the longest side. */
+  src: string;
 }
 
 export interface Me {

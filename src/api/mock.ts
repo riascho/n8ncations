@@ -21,6 +21,7 @@ import type {
   RosterResponse,
   RsvpResult,
   SignupStatus,
+  TripPhotosResponse,
   WaitlistEntry,
   Workation,
   WorkationsResponse,
@@ -28,6 +29,7 @@ import type {
 import { POLLS } from "../data/polls";
 import { getUser } from "../auth";
 import { todayIso } from "../dates";
+import { assetPath } from "../paths";
 import type { SessionUser } from "../auth";
 
 interface VoteRow {
@@ -106,7 +108,7 @@ function personFor(sub: string): Person {
    attendee list on that trip's page. */
 type WorkationRow = Omit<
   Workation,
-  "attendees" | "waitlisted" | "organizer" | "slackUrl"
+  "attendees" | "waitlisted" | "organizer" | "slackUrl" | "photosUrl"
 > & {
   organizerSub: string | null;
 };
@@ -273,6 +275,14 @@ const slackThreads: Record<string, string> = {
    thread. Lapland and Lisbon were made by hand. */
 const pitchOfTrip: Record<string, string> = {
   "01": "p-00",
+};
+
+/* Stands in for `drive_folder_url` on a trip whose folder "Trip Drive
+   Folders" has opened to n8n.io. Only past Lisbon has one, so its card links
+   to the folder and its page steps through the photos; the other trips stay
+   as they are. */
+const photoFolders: Record<string, string> = {
+  "00": "https://drive.google.com/drive/folders/mock-lisbon",
 };
 
 const pitchRows: PitchRow[] = [
@@ -474,7 +484,34 @@ export function getWorkations(): Promise<WorkationsResponse> {
       organizer: organizerSub ? { name: personFor(organizerSub).name } : null,
       /* Like the workflow: the thread of the pitch the trip started as. */
       slackUrl: slackThreads[pitchOfTrip[row.workationId] ?? ""] ?? "",
+      photosUrl: photoFolders[row.workationId] ?? "",
     })),
+  });
+}
+
+/* Like the workflow: 404 unless the trip's folder is open to n8n.io, and
+   the photos come back as data: URLs. public/ has a single photo, so the
+   mock sends it three times: the arrows step through four identical
+   photos (the cover plus three), and the alt text shows which one is up. */
+export async function getTripPhotos(
+  workationId: string,
+): Promise<TripPhotosResponse> {
+  requireUser();
+  requireTrip(workationId);
+  if (!photoFolders[workationId]) {
+    throw new ApiError(404, "No photos for this n8ncation.");
+  }
+  const src = await dataUrlOf(assetPath("/villa.jpeg"));
+  return delay({ photos: [{ src }, { src }, { src }] });
+}
+
+async function dataUrlOf(path: string): Promise<string> {
+  const blob = await (await fetch(path)).blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new ApiError(0, "Could not read the photo."));
+    reader.readAsDataURL(blob);
   });
 }
 

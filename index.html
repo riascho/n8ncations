@@ -135,6 +135,28 @@
             height="960"
             fetchpriority="high"
           /><span class="photo-label" data-detail-label></span>
+          <!-- A trip with a photosUrl steps through its Drive photos here,
+               from GET /trip-photos (showTripPhotos() in
+               src/features/workations.ts). Hidden otherwise, and always on
+               a pitch's page, which shares this markup. -->
+          <button
+            type="button"
+            class="carousel-button detail-photo-button detail-photo-prev"
+            data-photo-prev
+            aria-label="Previous photo"
+            hidden
+          >
+            <span aria-hidden="true">←</span>
+          </button>
+          <button
+            type="button"
+            class="carousel-button detail-photo-button detail-photo-next"
+            data-photo-next
+            aria-label="Next photo"
+            hidden
+          >
+            <span aria-hidden="true">→</span>
+          </button>
         </div>
         <div class="detail-body">
           <div class="detail-top">
@@ -148,7 +170,8 @@
           <p class="detail-description" data-detail-description></p>
           <!-- The same four facts on a trip's and a pitch's page: cost, group
                size, accommodation and the Slack thread (the last two only
-               with a link). Filled by fillFacts() in
+               with a link), plus the photo folder on a trip only, once it
+               has one. Filled by fillFacts() in
                src/features/workations.ts on a trip, where cost and
                accommodation come from the pitch it started as and the
                thread is that pitch's, and by fillPitchFacts() in
@@ -176,6 +199,15 @@
               <dd>
                 <a target="_blank" rel="noopener noreferrer"
                   >Open the Slack thread</a
+                >
+              </dd>
+            </div>
+            <!-- Trips only, once the Drive folder is open to n8n.io. -->
+            <div data-detail-fact="photos" hidden>
+              <dt>Photos</dt>
+              <dd>
+                <a target="_blank" rel="noopener noreferrer"
+                  >View photos of this n8ncation</a
                 >
               </dd>
             </div>
@@ -908,7 +940,9 @@
       </section>
       <!-- One compact card per past n8ncation, a slide in the carousel on
            /workations, filled from GET /workations. The heading links
-           through to /n8ncation/<slug> for the full card. -->
+           through to /n8ncation/<slug> for the full card. A trip with a
+           photosUrl also links to its Drive photo folder; the photos
+           themselves are on the trip's page. -->
       <template id="trip-template">
         <article class="trip trip-compact">
           <div class="trip-photo">
@@ -925,6 +959,11 @@
               <p class="dates"></p>
             </div>
             <p class="trip-attendees"></p>
+            <p class="trip-photos-link" hidden>
+              <a target="_blank" rel="noopener noreferrer"
+                >Open the photo folder</a
+              >
+            </p>
           </div>
         </article>
       </template>
