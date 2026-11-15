@@ -97,7 +97,7 @@ export interface WorkationsResponse {
 
 /** GET /trip-photos?workationId=: up to eight photos from the trip's Drive
     folder, oldest first. The folder is private to n8n.io, so the browser
-    can't load Drive images itself: n8n fetches small thumbnails with its
+    can't load Drive images itself: n8n fetches 1600px-wide thumbnails with its
     own Drive credential and sends them inline. 404 while the trip has no
     `photosUrl`. */
 export interface TripPhotosResponse {
@@ -105,7 +105,8 @@ export interface TripPhotosResponse {
 }
 
 export interface TripPhoto {
-  /** Always a `data:image/…` URL, about 640px on the longest side. */
+  /** Always a `data:image/…` URL, about 1600px wide: the trip page's photo
+      is up to 1160px wide, so it stays sharp on most screens. */
   src: string;
 }
 
