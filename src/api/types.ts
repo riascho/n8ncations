@@ -96,7 +96,7 @@ export interface WorkationsResponse {
 }
 
 /** GET /trip-photos?workationId=: up to eight photos from the trip's Drive
-    folder, oldest first. The folder is private to n8n.io, so the browser
+    folder, the most recently uploaded first. The folder is private to n8n.io, so the browser
     can't load Drive images itself: n8n fetches 1600px-wide thumbnails with its
     own Drive credential and sends them inline. 404 while the trip has no
     `photosUrl`. */

@@ -98,7 +98,7 @@
               "name": "q",
               "value": "='{{ $json.folderId }}' in parents and trashed = false and mimeType contains 'image/'"
             },
-            { "name": "orderBy", "value": "createdTime" },
+            { "name": "orderBy", "value": "createdTime desc" },
             { "name": "pageSize", "value": "8" },
             { "name": "fields", "value": "files(id,mimeType,thumbnailLink)" }
           ]
