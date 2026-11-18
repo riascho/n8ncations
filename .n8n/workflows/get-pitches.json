@@ -1,0 +1,216 @@
+{
+  "name": "/pitches",
+  "nodes": [
+    {
+      "name": "GET /pitches",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "06f0d01f-aa47-4193-899e-b7405dafb2d8",
+      "parameters": {
+        "path": "pitches",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "e96a727e-a2e9-43d2-8895-545a7cb2d1a8",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get listed pitches",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "matchType": "anyCondition",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "keyValue": "open"
+            },
+            {
+              "keyName": "status",
+              "keyValue": "cancelled"
+            },
+            {
+              "keyName": "status",
+              "keyValue": "expired"
+            },
+            {
+              "keyName": "organizer",
+              "keyValue": "={{ $json.jwtPayload.sub }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "a72ab3af-9265-441f-bebd-0d1953f8eb5f",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Get interest",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "rfdMCrRnPKnniv8o",
+          "mode": "list",
+          "cachedResultName": "pitch_interest",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/rfdMCrRnPKnniv8o"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "4f857d90-49be-4b5b-be2a-063fec50c979",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Get profiles",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "RJwwx5BbhQRyJbzf",
+          "mode": "list",
+          "cachedResultName": "profiles",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/RJwwx5BbhQRyJbzf"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "f474c8c5-2e44-47dd-8b69-8e9d4c8afb06",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Build response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const sub = $(\"GET /pitches\").first().json.jwtPayload.sub;\nconst today = $today.toFormat(\"yyyy-MM-dd\");\n// Everyone gets open pitches, plus cancelled ones until their deadline, so\n// the people who were interested can read the organizer's reason, and expired\n// ones until their start date, while the organizer can still reopen them. The\n// caller also gets every pitch they organize, in any status, for /me.\nconst pitches = $(\"Get listed pitches\")\n  .all()\n  .map((i) => i.json)\n  .filter(\n    (r) =>\n      r.pitch_id &&\n      (r.status === \"open\" ||\n        (r.status === \"cancelled\" && String(r.deadline) >= today) ||\n        (r.status === \"expired\" && String(r.start_date) >= today) ||\n        r.organizer === sub),\n  );\nconst interest = $(\"Get interest\").all().map((i) => i.json).filter((r) => r.pitch_id);\nconst profileBySub = new Map(\n  $(\"Get profiles\").all().map((i) => i.json).filter((p) => p.user_sub).map((p) => [p.user_sub, p]),\n);\nconst orEmpty = (value) => (typeof value === \"string\" && value.trim() ? value.trim() : null);\n// Who is interested, oldest first (the order spots go in if the pitch\n// becomes a trip). One entry per person. Everyone gets this list: display\n// fields only, and the caller flagged with isMe, never anyone's sub or email.\nconst interestedPeople = (pitchId) => {\n  const seen = new Set();\n  return interest\n    .filter((r) => r.pitch_id === pitchId)\n    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))\n    .filter((r) => !seen.has(r.user_sub) && seen.add(r.user_sub))\n    .map((r) => {\n      const profile = profileBySub.get(r.user_sub) ?? {};\n      return {\n        name: profile.name ?? \"\",\n        team: orEmpty(profile.team),\n        jobTitle: orEmpty(profile.jobTitle),\n        isMe: r.user_sub === sub,\n      };\n    });\n};\n\nreturn [\n  {\n    json: {\n      pitches: pitches.map((row) => {\n        const people = interestedPeople(row.pitch_id);\n        const organizerName = profileBySub.get(row.organizer)?.name ?? \"\";\n        return {\n          pitchId: row.pitch_id,\n          status: row.status,\n          cancelReason: row.status === \"cancelled\" ? (row.cancel_reason ?? \"\") : \"\",\n          place: row.place,\n          startDate: row.start_date ?? \"\",\n          endDate: row.end_date ?? \"\",\n          description: row.description ?? \"\",\n          accommodationUrl: row.accommodation_url ?? \"\",\n          imageUrl: row.image_url ?? \"\",\n          imageAlt: row.image_alt ?? \"\",\n          capacity: row.capacity,\n          threshold: row.threshold,\n          deadline: row.deadline ?? \"\",\n          costEstimate: typeof row.cost_estimate === \"number\" ? row.cost_estimate : null,\n          costIncludes: row.cost_includes ?? \"\",\n          interested: people.length,\n          interestedPeople: people,\n          interestedByMe: people.some((person) => person.isMe),\n          // A flag, never the sub: everyone gets this list.\n          organizedByMe: row.organizer === sub,\n          organizer: organizerName ? { name: organizerName } : null,\n          // Set by \"Slack Bot Notifier\" when the pitch was announced.\n          slackUrl: row.slack_url ?? \"\",\n        };\n      }),\n      slackChannelUrl: $vars.SLACK_CHANNEL_URL ?? \"\",\n    },\n  },\n];"
+      },
+      "id": "289e7d95-bea6-482f-b6c5-26b3331fb927",
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "25f88ee3-332b-4960-a004-5cda941c114d",
+      "position": [
+        1200,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "GET /pitches": {
+      "main": [
+        [
+          {
+            "node": "Get listed pitches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get interest": {
+      "main": [
+        [
+          {
+            "node": "Get profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get profiles": {
+      "main": [
+        [
+          {
+            "node": "Build response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build response": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get listed pitches": {
+      "main": [
+        [
+          {
+            "node": "Get interest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "NQAi3FG6eVyC716s"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

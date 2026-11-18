@@ -1,0 +1,465 @@
+{
+  "name": "/logistics",
+  "nodes": [
+    {
+      "name": "Webhook /logistics",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "a36394c3-fa8d-4dd4-8085-3480066c3ce0",
+      "parameters": {
+        "multipleMethods": true,
+        "httpMethod": [
+          "GET",
+          "POST"
+        ],
+        "path": "logistics",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "66343f4d-a285-4869-88e0-901e3fe11ccf",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get my logistics",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "xGuYK2xYfdlCOmuT",
+          "mode": "list",
+          "cachedResultName": "logistics",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/xGuYK2xYfdlCOmuT"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $json.query.workationId }}"
+            },
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $json.jwtPayload.sub }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "efd19f37-43bb-4035-ad82-ffecdd822fec",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Format logistics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const sub = $(\"Webhook /logistics\").first().json.jwtPayload.sub;\nconst row = $input.all().map((i) => i.json).find((r) => r.user_sub === sub);\nconst pick = (value) => (typeof value === \"string\" && value !== \"\" ? value : null);\nreturn [\n  {\n    json: {\n      mine: row\n        ? {\n            dietary: pick(row.dietary),\n            roomPreference: pick(row.room_preference),\n            emergencyContact: pick(row.emergency_contact),\n            expectations: pick(row.expectations),\n          }\n        : null,\n    },\n  },\n];"
+      },
+      "id": "8f9b4101-618c-49e5-a52e-0bc936db2b34",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "2a89ce5d-6166-401c-9cdc-aecf8d678534",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Get trip",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "KjtWQS5FT7kL7vnG",
+          "mode": "list",
+          "cachedResultName": "workations",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/KjtWQS5FT7kL7vnG"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $json.body.workationId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "476ba650-968e-4b99-b7e4-056cbd7638cb",
+      "position": [
+        960,
+        192
+      ]
+    },
+    {
+      "name": "Get my signup",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $('Webhook /logistics').first().json.body.workationId }}"
+            },
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Webhook /logistics').first().json.jwtPayload.sub }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "953a6c65-272e-4fce-b64f-711af4c001f2",
+      "position": [
+        1200,
+        192
+      ]
+    },
+    {
+      "name": "Validate logistics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const request = $(\"Webhook /logistics\").first().json;\nconst sub = request.jwtPayload.sub;\nconst body = request.body ?? {};\nconst fail = (statusCode, message) => [\n  { json: { ok: false, statusCode, body: { message } } },\n];\n\nif (typeof body.workationId !== \"string\") return fail(400, \"Send a workationId.\");\nconst trip = $(\"Get trip\").all().map((i) => i.json).find((r) => r.workation_id === body.workationId);\nif (!trip) return fail(404, \"We could not find that n8ncation.\");\nif (String(trip.end_date) < $today.toFormat(\"yyyy-MM-dd\")) {\n  return fail(400, \"This n8ncation has already happened.\");\n}\nconst signedUp = $(\"Get my signup\").all().some((i) => i.json.user_sub === sub);\nif (!signedUp) return fail(400, \"Sign up for this n8ncation first.\");\n\n// Same rules as the form: whitespace collapsed, 200 characters,\n// empty stored as null.\nconst text = (value) => {\n  if (typeof value !== \"string\") return null;\n  const cleaned = value.replace(/\\s+/g, \" \").trim().slice(0, 200);\n  return cleaned === \"\" ? null : cleaned;\n};\n// expectations is multi-line, like a pitch description: line breaks kept\n// (at most one blank line), other whitespace collapsed, 500 characters.\nconst paragraph = (value) => {\n  if (typeof value !== \"string\") return null;\n  const cleaned = value\n    .replace(/[^\\S\\n]+/g, \" \")\n    .replace(/\\n{3,}/g, \"\\n\\n\")\n    .trim()\n    .slice(0, 500);\n  return cleaned === \"\" ? null : cleaned;\n};\nconst row = {\n  workation_id: body.workationId,\n  user_sub: sub,\n  dietary: text(body.dietary),\n  room_preference: text(body.roomPreference),\n  emergency_contact: text(body.emergencyContact),\n  expectations: paragraph(body.expectations),\n};\nreturn [{ json: { ok: true, row } }];"
+      },
+      "id": "398ff0ae-46ac-4185-956b-0dcaa6282a38",
+      "position": [
+        1440,
+        192
+      ]
+    },
+    {
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c9198fca-a4e0-4891-a39b-634563b5c02c",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f90da6fe-151d-4456-8f32-60c36aa41ec4",
+      "position": [
+        1680,
+        192
+      ]
+    },
+    {
+      "name": "Upsert logistics",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "xGuYK2xYfdlCOmuT",
+          "mode": "list",
+          "cachedResultName": "logistics",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/xGuYK2xYfdlCOmuT"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $('Validate logistics').first().json.row.workation_id }}"
+            },
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Validate logistics').first().json.row.user_sub }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "workation_id": "={{ $('Validate logistics').first().json.row.workation_id }}",
+            "user_sub": "={{ $('Validate logistics').first().json.row.user_sub }}",
+            "dietary": "={{ $('Validate logistics').first().json.row.dietary }}",
+            "room_preference": "={{ $('Validate logistics').first().json.row.room_preference }}",
+            "emergency_contact": "={{ $('Validate logistics').first().json.row.emergency_contact }}",
+            "expectations": "={{ $('Validate logistics').first().json.row.expectations }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "workation_id",
+              "displayName": "workation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "user_sub",
+              "displayName": "user_sub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "dietary",
+              "displayName": "dietary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "room_preference",
+              "displayName": "room_preference",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "emergency_contact",
+              "displayName": "emergency_contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "expectations",
+              "displayName": "expectations",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "3743c9e8-f09f-4d44-9830-179eb752958e",
+      "position": [
+        1920,
+        192
+      ]
+    },
+    {
+      "name": "Respond 204",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 204
+        }
+      },
+      "id": "37ca46b7-9ba6-4831-985b-67c63afd9d45",
+      "position": [
+        2160,
+        192
+      ]
+    },
+    {
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Validate logistics').first().json.body) }}",
+        "options": {
+          "responseCode": "={{ $('Validate logistics').first().json.statusCode }}"
+        }
+      },
+      "id": "fd6ad524-2dad-42fd-be6a-d692e01db9a7",
+      "position": [
+        2400,
+        384
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook /logistics": {
+      "main": [
+        [
+          {
+            "node": "Get my logistics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get trip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get my logistics": {
+      "main": [
+        [
+          {
+            "node": "Format logistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format logistics": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get trip": {
+      "main": [
+        [
+          {
+            "node": "Get my signup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get my signup": {
+      "main": [
+        [
+          {
+            "node": "Validate logistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate logistics": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "Upsert logistics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert logistics": {
+      "main": [
+        [
+          {
+            "node": "Respond 204",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

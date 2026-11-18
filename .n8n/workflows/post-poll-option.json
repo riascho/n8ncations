@@ -1,0 +1,357 @@
+{
+  "name": "/poll-option",
+  "nodes": [
+    {
+      "name": "POST /poll-option",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "62ab00db-c9d1-4cfa-a2fd-bab3f1f648e7",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "poll-option",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "02755585-6c1b-4187-abe9-114917b58b16",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const request = $(\"POST /poll-option\").first().json;\nconst { pollId, value } = request.body ?? {};\nconst fail = (message) => [{ json: { ok: false, statusCode: 400, body: { message } } }];\nif (typeof pollId !== \"string\" || typeof value !== \"string\") return fail(\"Send a pollId and a value.\");\nconst cleaned = value.replace(/\\s+/g, \" \").trim().slice(0, 40);\nif (!cleaned) return fail(\"Type an option first.\");\nreturn [\n  {\n    json: {\n      ok: true,\n      poll_id: pollId,\n      value: cleaned,\n      value_key: cleaned.toLowerCase(),\n      created_by_sub: request.jwtPayload.sub,\n    },\n  },\n];"
+      },
+      "id": "32d7728e-b3fa-48f8-8c74-c878df9084a0",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d4949a52-0e92-4d4d-9924-9f2b80d8ddf7",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3823076b-f516-4afa-8d79-48951ea30a45",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Find existing option",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "rowExists",
+        "dataTableId": {
+          "__rl": true,
+          "value": "G9VDtTsSs9fNXvmw",
+          "mode": "list",
+          "cachedResultName": "poll options",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/G9VDtTsSs9fNXvmw"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "poll_id",
+              "keyValue": "={{ $json.poll_id }}"
+            },
+            {
+              "keyName": "value_key",
+              "keyValue": "={{ $json.value_key }}"
+            }
+          ]
+        }
+      },
+      "id": "70e7dcd5-c6a6-4602-8537-6c85d8e21a44",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Option already exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b4391418-b8ce-4b93-89be-e7e6596a16dd",
+              "leftValue": "={{ $json }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "17188093-4468-4da9-9614-bb744cb124f0",
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "name": "Insert option",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "G9VDtTsSs9fNXvmw",
+          "mode": "list",
+          "cachedResultName": "poll options",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/G9VDtTsSs9fNXvmw"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "poll_id": "={{ $('Normalize').first().json.poll_id }}",
+            "value": "={{ $('Normalize').first().json.value }}",
+            "value_key": "={{ $('Normalize').first().json.value_key }}",
+            "created_by_sub": "={{ $('Normalize').first().json.created_by_sub }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "poll_id",
+              "displayName": "poll_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "value",
+              "displayName": "value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "value_key",
+              "displayName": "value_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_by_sub",
+              "displayName": "created_by_sub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "cdcffba8-ff80-44ad-9b3e-081c9a18675a",
+      "position": [
+        1200,
+        192
+      ]
+    },
+    {
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "fe78d618-50e8-4c5a-be48-e137783a8775",
+      "position": [
+        1440,
+        -192
+      ]
+    },
+    {
+      "name": "Respond 201",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "id": "2a595370-cfc7-44ef-951e-2ffa986879d6",
+      "position": [
+        1680,
+        192
+      ]
+    },
+    {
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Normalize').first().json.body) }}",
+        "options": {
+          "responseCode": "={{ $('Normalize').first().json.statusCode }}"
+        }
+      },
+      "id": "ae66c2a6-ff46-450d-81c6-41a2b2787723",
+      "position": [
+        1920,
+        384
+      ]
+    }
+  ],
+  "connections": {
+    "POST /poll-option": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "Find existing option",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find existing option": {
+      "main": [
+        [
+          {
+            "node": "Option already exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Option already exists?": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert option",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert option": {
+      "main": [
+        [
+          {
+            "node": "Respond 201",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

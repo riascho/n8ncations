@@ -1,0 +1,709 @@
+{
+  "name": "Date Check & Status Updates",
+  "nodes": [
+    {
+      "name": "Every morning",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "d6166c88-bc3c-46b7-ba70-59a420027523",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get open pitches",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "keyValue": "open"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "663bb41b-9669-438f-b6f9-ba4630cda143",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Get interest",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "rfdMCrRnPKnniv8o",
+          "mode": "list",
+          "cachedResultName": "pitch_interest",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/rfdMCrRnPKnniv8o"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "159d9cff-8f49-4f2a-90e6-922c06fe24ef",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Get workations",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "KjtWQS5FT7kL7vnG",
+          "mode": "list",
+          "cachedResultName": "workations",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/KjtWQS5FT7kL7vnG"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "1fffa2a3-7d01-48c5-a18b-7b72281818a8",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Compared as text: every date is a YYYY-MM-DD String column.\nconst today = $today.toFormat(\"yyyy-MM-dd\");\nconst pitches = $(\"Get open pitches\").all().map((i) => i.json).filter((r) => r.pitch_id && r.status === \"open\");\nconst interest = $(\"Get interest\").all().map((i) => i.json).filter((r) => r.pitch_id);\nconst trips = $(\"Get workations\").all().map((i) => i.json).filter((r) => r.workation_id);\n\nlet nextId =\n  Math.max(0, ...trips.map((t) => Number(t.workation_id)).filter(Number.isFinite)) + 1;\nconst slugs = new Set(trips.map((t) => t.slug));\nconst slugFor = (place, startDate) => {\n  const base = `${String(place)\n    .toLowerCase()\n    .normalize(\"NFKD\")\n    .replace(/[̀-ͯ]/g, \"\")\n    .replace(/[^a-z]+/g, \"-\")\n    .replace(/^-|-$/g, \"\")}-${String(startDate).slice(0, 4)}`;\n  let slug = base;\n  for (let n = 2; slugs.has(slug); n += 1) slug = `${base}-${n}`;\n  slugs.add(slug);\n  return slug;\n};\n\nconst createTrips = [];\nconst createSignups = [];\nconst updates = [];\n// One per decided pitch, sent to \"Slack Bot Notifier\" once every write is done.\nconst notifications = [];\nfor (const pitch of pitches) {\n  // Oldest interest first; one row per person.\n  const seen = new Set();\n  const people = interest\n    .filter((r) => r.pitch_id === pitch.pitch_id)\n    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))\n    .filter((r) => !seen.has(r.user_sub) && seen.add(r.user_sub));\n\n  if (people.length >= pitch.threshold) {\n    const workationId = String(nextId++).padStart(2, \"0\");\n    createTrips.push({\n      workation_id: workationId,\n      slug: slugFor(pitch.place, pitch.start_date),\n      title: `n8ncation #${workationId}`,\n      place: pitch.place,\n      start_date: pitch.start_date,\n      end_date: pitch.end_date,\n      description: pitch.description ?? \"\",\n      // Carried over so the trip keeps what the pitch showed: its photo\n      // link, accommodation link and cost estimate.\n      image_url: pitch.image_url ?? \"\",\n      image_alt: pitch.image_alt ?? \"\",\n      accommodation_url: pitch.accommodation_url ?? \"\",\n      cost_estimate: typeof pitch.cost_estimate === \"number\" ? pitch.cost_estimate : null,\n      cost_includes: pitch.cost_includes ?? \"\",\n      organizer: pitch.organizer,\n      capacity: pitch.capacity,\n    });\n    people.forEach((row, index) =>\n      createSignups.push({\n        workation_id: workationId,\n        user_sub: row.user_sub,\n        // No capacity means no limit: everyone interested gets a spot.\n        status: typeof pitch.capacity !== \"number\" || index < pitch.capacity ? \"going\" : \"waitlist\",\n      }),\n    );\n    updates.push({ pitch_id: pitch.pitch_id, status: \"confirmed\", workation_id: workationId });\n    notifications.push({ event: \"pitch_confirmed\", pitchId: pitch.pitch_id, workationId });\n  } else if (String(pitch.deadline) < today) {\n    updates.push({ pitch_id: pitch.pitch_id, status: \"expired\", workation_id: \"\" });\n    notifications.push({ event: \"pitch_expired\", pitchId: pitch.pitch_id, workationId: \"\" });\n  }\n}\nreturn [{ json: { createTrips, createSignups, updates, notifications } }];"
+      },
+      "id": "bea48167-faa6-4c8e-ac68-63ee0c04ac14",
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "name": "Trips to create",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return $(\"Plan\").first().json.createTrips.map((json) => ({ json }));"
+      },
+      "id": "ee6cecc0-9f8a-4219-b254-db2e9e9c3e2b",
+      "position": [
+        1200,
+        -192
+      ]
+    },
+    {
+      "name": "Signups to create",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return $(\"Plan\").first().json.createSignups.map((json) => ({ json }));"
+      },
+      "id": "d1decdf1-5b4e-4ab1-aa68-c92e85c5f61a",
+      "position": [
+        1440,
+        0
+      ]
+    },
+    {
+      "name": "Pitch updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return $(\"Plan\").first().json.updates.map((json) => ({ json }));"
+      },
+      "id": "dc7e9c02-4a3c-4b54-aeeb-b4253af9050b",
+      "position": [
+        1680,
+        192
+      ]
+    },
+    {
+      "name": "Insert workations",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "KjtWQS5FT7kL7vnG",
+          "mode": "list",
+          "cachedResultName": "workations",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/KjtWQS5FT7kL7vnG"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "workation_id": "={{ $json.workation_id }}",
+            "slug": "={{ $json.slug }}",
+            "title": "={{ $json.title }}",
+            "place": "={{ $json.place }}",
+            "start_date": "={{ $json.start_date }}",
+            "end_date": "={{ $json.end_date }}",
+            "description": "={{ $json.description }}",
+            "image_url": "={{ $json.image_url }}",
+            "image_alt": "={{ $json.image_alt }}",
+            "organizer": "={{ $json.organizer }}",
+            "capacity": "={{ $json.capacity }}",
+            "accommodation_url": "={{ $json.accommodation_url }}",
+            "cost_estimate": "={{ $json.cost_estimate }}",
+            "cost_includes": "={{ $json.cost_includes }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "workation_id",
+              "displayName": "workation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "slug",
+              "displayName": "slug",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "place",
+              "displayName": "place",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "start_date",
+              "displayName": "start_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "end_date",
+              "displayName": "end_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "image_url",
+              "displayName": "image_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "image_alt",
+              "displayName": "image_alt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "organizer",
+              "displayName": "organizer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "capacity",
+              "displayName": "capacity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "accommodation_url",
+              "displayName": "accommodation_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "cost_estimate",
+              "displayName": "cost_estimate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "cost_includes",
+              "displayName": "cost_includes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "cad85550-f093-4546-8270-10a8857fb055",
+      "position": [
+        1920,
+        -192
+      ]
+    },
+    {
+      "name": "Insert signups",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "workation_id": "={{ $json.workation_id }}",
+            "user_sub": "={{ $json.user_sub }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "workation_id",
+              "displayName": "workation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "user_sub",
+              "displayName": "user_sub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b616a271-3dfb-443c-a12e-3156f03bec55",
+      "position": [
+        2160,
+        0
+      ]
+    },
+    {
+      "name": "Update pitch",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pitch_id",
+              "keyValue": "={{ $json.pitch_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "={{ $json.status }}",
+            "workation_id": "={{ $json.workation_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "workation_id",
+              "displayName": "workation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b6317d52-8d8e-4eee-87a0-ae556d662032",
+      "position": [
+        2400,
+        192
+      ]
+    },
+    {
+      "name": "Notifications to send",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return $(\"Plan\").first().json.notifications.map((json) => ({ json }));"
+      },
+      "id": "ef55b625-eae7-4994-840e-5664a4df2166",
+      "position": [
+        2640,
+        192
+      ],
+      "executeOnce": true
+    },
+    {
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "6pNrfjbynQ4IXPM8",
+          "cachedResultName": "Slack Bot Notifier"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "={{ $json.event }}",
+            "pitchId": "={{ $json.pitchId }}",
+            "workationId": "={{ $json.workationId }}",
+            "actorSub": "",
+            "promoteSub": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pitchId",
+              "displayName": "pitchId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workationId",
+              "displayName": "workationId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actorSub",
+              "displayName": "actorSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "promoteSub",
+              "displayName": "promoteSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "903afafd-c7ed-4178-a51f-23e1d49202ed",
+      "position": [
+        2880,
+        192
+      ]
+    }
+  ],
+  "connections": {
+    "Every morning": {
+      "main": [
+        [
+          {
+            "node": "Get open pitches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get open pitches": {
+      "main": [
+        [
+          {
+            "node": "Get interest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get interest": {
+      "main": [
+        [
+          {
+            "node": "Get workations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get workations": {
+      "main": [
+        [
+          {
+            "node": "Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan": {
+      "main": [
+        [
+          {
+            "node": "Trips to create",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Signups to create",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Pitch updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trips to create": {
+      "main": [
+        [
+          {
+            "node": "Insert workations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signups to create": {
+      "main": [
+        [
+          {
+            "node": "Insert signups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pitch updates": {
+      "main": [
+        [
+          {
+            "node": "Update pitch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update pitch": {
+      "main": [
+        [
+          {
+            "node": "Notifications to send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notifications to send": {
+      "main": [
+        [
+          {
+            "node": "Notify Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "NQAi3FG6eVyC716s"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

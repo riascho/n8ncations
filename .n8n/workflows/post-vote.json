@@ -1,0 +1,289 @@
+{
+  "name": "/vote",
+  "nodes": [
+    {
+      "name": "POST /vote",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "ea313b18-f8c2-4c3c-9fb0-56ce94578583",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vote",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "4732b27e-e2a8-4ac3-9278-d3e83677ab1c",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get poll options",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "G9VDtTsSs9fNXvmw",
+          "mode": "list",
+          "cachedResultName": "poll options",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/G9VDtTsSs9fNXvmw"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "poll_id",
+              "keyValue": "={{ $json.body.pollId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "4598ea00-1157-40fa-86fa-c62d804ccf2f",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Validate vote",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Identity from the token, never from the body.\nconst request = $(\"POST /vote\").first().json;\nconst { pollId, options } = request.body ?? {};\nif (typeof pollId !== \"string\" || !Array.isArray(options)) {\n  return [{ json: { ok: false, statusCode: 400, body: { message: \"Send a pollId and an options array.\" } } }];\n}\nconst allowed = new Set(\n  $(\"Get poll options\").all().map((i) => i.json).filter((r) => r.poll_id === pollId).map((r) => r.value),\n);\nif (allowed.size === 0) {\n  return [{ json: { ok: false, statusCode: 404, body: { message: \"We could not find that poll.\" } } }];\n}\nconst validated = [...new Set(options)].filter((v) => typeof v === \"string\" && allowed.has(v));\nreturn [\n  {\n    json: {\n      ok: true,\n      poll_id: pollId,\n      user_sub: request.jwtPayload.sub,\n      options: JSON.stringify(validated),\n    },\n  },\n];"
+      },
+      "id": "1fe8dd3e-75d0-4e1d-aed0-c89795b10149",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "66ef6bae-5275-438c-b3a0-519f681704d0",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a2cfe68c-5be7-43c1-a226-e4cd938d6ead",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Upsert vote",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tBShjtSsWwIPbUFu",
+          "mode": "list",
+          "cachedResultName": "votes",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/tBShjtSsWwIPbUFu"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Validate vote').first().json.user_sub }}"
+            },
+            {
+              "keyName": "poll_id",
+              "keyValue": "={{ $('Validate vote').first().json.poll_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "poll_id": "={{ $('Validate vote').first().json.poll_id }}",
+            "user_sub": "={{ $('Validate vote').first().json.user_sub }}",
+            "options": "={{ $('Validate vote').first().json.options }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "poll_id",
+              "displayName": "poll_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "user_sub",
+              "displayName": "user_sub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "options",
+              "displayName": "options",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b70ebc92-3b43-46f4-b3af-7f279b707501",
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "name": "Respond 201",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "id": "fbaa9a82-e880-41da-aeaa-aead38f481a7",
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Validate vote').first().json.body) }}",
+        "options": {
+          "responseCode": "={{ $('Validate vote').first().json.statusCode }}"
+        }
+      },
+      "id": "a3299d85-89e1-4a66-90a1-e8c7388b73e7",
+      "position": [
+        1440,
+        192
+      ]
+    }
+  ],
+  "connections": {
+    "POST /vote": {
+      "main": [
+        [
+          {
+            "node": "Get poll options",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get poll options": {
+      "main": [
+        [
+          {
+            "node": "Validate vote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate vote": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "Upsert vote",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert vote": {
+      "main": [
+        [
+          {
+            "node": "Respond 201",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

@@ -40,7 +40,7 @@ The UI follows the post-rebrand n8n design system described in [`n8ndesign.md`](
                                    pitch, interest, RSVP and│decision routes call it
                                                ┌────────────▼─────────────┐        ┌──────────────────┐
                                                │ n8n sub-workflow         │ ─────▶ │ Slack            │
-                                               │ "Slack notify"           │        │ #mission-n8n-    │
+                                               │ "Slack Bot Notifier"           │        │ #mission-n8n-    │
                                                └──────────────────────────┘        │ workations + DMs │
                                                                                    └──────────────────┘
 ```
@@ -205,7 +205,7 @@ When moving to a new Google client, n8n instance or site URL:
 
 ## Backend API
 
-Each route is its own n8n workflow, named after its path (`/workations`, `/me`, …): a Webhook node (Respond: _Using 'Respond to Webhook' node_) followed by Data Table and Code nodes. URLs are `${VITE_API_BASE}/<path>`. The table below is the contract the frontend relies on. Everything about the workflows themselves is in [`.n8n/`](.n8n/README.md): how each route behaves, the Data Tables, the scheduled "Date Check & Status Updates" and "Trip Drive Folders" workflows, importable blueprints for every workflow, and [`DISCREPANCIES.md`](.n8n/DISCREPANCIES.md) for where the live instance differs from this contract.
+Each route is its own n8n workflow, named after its path (`/workations`, `/me`, …): a Webhook node (Respond: _Using 'Respond to Webhook' node_) followed by Data Table and Code nodes. URLs are `${VITE_API_BASE}/<path>`. The table below is the contract the frontend relies on. Everything about the workflows themselves is in [`.n8n/`](.n8n/README.md): how each route behaves, the Data Tables, the scheduled "Date Check & Status Updates" and "Trip Drive Folders" workflows, and importable blueprints for every workflow.
 
 | Method | Path              | Auth | Request body                                                               | Response                                                                                                                                                                        | Tables                                                                      |
 | ------ | ----------------- | ---- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |

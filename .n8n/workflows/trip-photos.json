@@ -1,0 +1,253 @@
+{
+  "name": "/trip-photos",
+  "nodes": [
+    {
+      "name": "GET /trip-photos",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "trip-photos",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": { "id": "EF3FVWn29g6p0qdG", "name": "JWT Auth account" }
+      },
+      "webhookId": "8fe7eebc-655b-4928-8907-64bf06332cc3",
+      "id": "cac97305-1302-49a0-b60f-28f9420d69ca",
+      "position": [0, 0]
+    },
+    {
+      "name": "Get trip",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "KjtWQS5FT7kL7vnG",
+          "mode": "list",
+          "cachedResultName": "workations",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/KjtWQS5FT7kL7vnG"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.query.workationId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "4b293c8d-c9fc-4052-a605-550abd6fb801",
+      "position": [240, 0]
+    },
+    {
+      "name": "Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// 404 unless the trip's folder is open to everyone at n8n.io: that is\n// when GET /workations sends its photosUrl, the only time the site asks.\n// 404 rather than 403: the frontend reads every 403 as an expired session.\nconst query = $(\"GET /trip-photos\").first().json.query ?? {};\nconst workationId = typeof query.workationId === \"string\" ? query.workationId.trim() : \"\";\nconst trip = $input.all().map((i) => i.json).find((r) => r.workation_id && r.workation_id === workationId);\nif (!workationId || !trip || trip.drive_domain_shared !== true || !trip.drive_folder_id) {\n  return [{ json: { ok: false, statusCode: 404, body: { message: \"No photos for this n8ncation.\" } } }];\n}\nreturn [{ json: { ok: true, statusCode: 200, body: {}, folderId: String(trip.drive_folder_id) } }];"
+      },
+      "id": "27a44055-9bc6-4afc-93b5-ecfb93f736fe",
+      "position": [480, 0]
+    },
+    {
+      "name": "OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "44d13703-53f9-4548-8bcf-30df5783a3dc",
+      "position": [720, 0]
+    },
+    {
+      "name": "List photos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "='{{ $json.folderId }}' in parents and trashed = false and mimeType contains 'image/'"
+            },
+            { "name": "orderBy", "value": "createdTime" },
+            { "name": "pageSize", "value": "8" },
+            { "name": "fields", "value": "files(id,mimeType,thumbnailLink)" }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "N1Aja1pCQRbh27iB", "name": "Google Drive" }
+      },
+      "id": "12e3679a-98f6-4d80-a13c-72d45d700edb",
+      "position": [960, -96]
+    },
+    {
+      "name": "Has photos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "leftValue": "={{ ($json.files ?? []).filter((f) => f.thumbnailLink).length }}",
+              "operator": { "type": "number", "operation": "gt" },
+              "rightValue": 0
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "6a36d4fe-5940-4c12-9801-419104405c47",
+      "position": [1200, -96]
+    },
+    {
+      "name": "One item per photo",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1.1,
+      "parameters": {
+        "fieldToSplitOut": "files",
+        "include": "noOtherFields",
+        "options": {}
+      },
+      "id": "f418a8c0-6a28-41a5-938c-f9183499de4f",
+      "position": [1440, -192]
+    },
+    {
+      "name": "Fetch thumbnail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ String($json.thumbnailLink ?? \"\").replace(/=s\\d+$/, \"=w1600\") }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": { "responseFormat": "file", "outputPropertyName": "data" }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "N1Aja1pCQRbh27iB", "name": "Google Drive" }
+      },
+      "id": "f8dcb550-8725-41c9-9666-4246d7ea5d73",
+      "position": [1680, -192]
+    },
+    {
+      "name": "Build photos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Each thumbnail inline as a data: URL: the folder is private to n8n.io,\n// so the browser couldn't load it from Drive itself. A thumbnail that\n// failed to download (Fetch thumbnail continues on error) is skipped.\nconst items = $input.all();\nconst photos = [];\nfor (let i = 0; i < items.length; i++) {\n  const file = items[i].binary?.data;\n  if (!file) continue;\n  const mime = String(file.mimeType ?? \"\");\n  if (!mime.startsWith(\"image/\")) continue;\n  const buffer = await this.helpers.getBinaryDataBuffer(i, \"data\");\n  photos.push({ src: \"data:\" + mime + \";base64,\" + buffer.toString(\"base64\") });\n}\nreturn [{ json: { statusCode: 200, body: { photos } } }];"
+      },
+      "id": "6378f01d-9d4e-42d0-a471-eefd142116a5",
+      "position": [1920, -192]
+    },
+    {
+      "name": "No photos yet",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{ \"statusCode\": 200, \"body\": { \"photos\": [] } }",
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "e9738871-a3fe-4b46-8929-7480240f14f9",
+      "position": [1440, 0]
+    },
+    {
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}",
+          "responseHeaders": {
+            "entries": [{ "name": "Cache-Control", "value": "private, max-age=3600" }]
+          }
+        }
+      },
+      "id": "1efd9043-c284-4d4c-b2db-b9d8fe636ed4",
+      "position": [2160, 0]
+    }
+  ],
+  "connections": {
+    "GET /trip-photos": { "main": [[{ "node": "Get trip", "type": "main", "index": 0 }]] },
+    "Get trip": { "main": [[{ "node": "Validate", "type": "main", "index": 0 }]] },
+    "Validate": { "main": [[{ "node": "OK?", "type": "main", "index": 0 }]] },
+    "OK?": {
+      "main": [
+        [{ "node": "List photos", "type": "main", "index": 0 }],
+        [{ "node": "Respond", "type": "main", "index": 0 }]
+      ]
+    },
+    "List photos": { "main": [[{ "node": "Has photos?", "type": "main", "index": 0 }]] },
+    "Has photos?": {
+      "main": [
+        [{ "node": "One item per photo", "type": "main", "index": 0 }],
+        [{ "node": "No photos yet", "type": "main", "index": 0 }]
+      ]
+    },
+    "One item per photo": { "main": [[{ "node": "Fetch thumbnail", "type": "main", "index": 0 }]] },
+    "Fetch thumbnail": { "main": [[{ "node": "Build photos", "type": "main", "index": 0 }]] },
+    "Build photos": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
+    "No photos yet": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "nodeGroups": [
+    {
+      "name": "Check the trip",
+      "nodeNames": ["Get trip", "Validate", "OK?"],
+      "description": "404 unless the trip has a Drive folder that is open to everyone at n8n.io"
+    },
+    {
+      "name": "Fetch thumbnails",
+      "nodeNames": ["One item per photo", "Fetch thumbnail", "Build photos"],
+      "description": "Downloads each photo's 1600px-wide thumbnail with the Drive credential and returns them inline as data: URLs"
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "NQAi3FG6eVyC716s"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

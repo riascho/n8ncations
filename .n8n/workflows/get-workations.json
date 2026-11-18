@@ -1,0 +1,234 @@
+{
+  "name": "/workations",
+  "nodes": [
+    {
+      "name": "GET /workations",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "d8a0bd52-7fe8-41e7-b785-4f12f4f47ae7",
+      "parameters": {
+        "path": "workations",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "78ec3038-b5ce-46df-aac5-6b3cbd5623da",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get workations",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "KjtWQS5FT7kL7vnG",
+          "mode": "list",
+          "cachedResultName": "workations",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/KjtWQS5FT7kL7vnG"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "95279304-2cfd-444d-93f9-0b4cf8a80378",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Get signups",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "72cf3b4b-5fbb-43e5-9347-08d4952b09d3",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Get profiles",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "RJwwx5BbhQRyJbzf",
+          "mode": "list",
+          "cachedResultName": "profiles",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/RJwwx5BbhQRyJbzf"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "cd253357-d655-4c66-9079-df60c9a6760a",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Get pitches",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "name": "Build response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// alwaysOutputData yields one empty item for an empty table, so rows\n// without their key column are skipped.\nconst sub = $(\"GET /workations\").first().json.jwtPayload.sub;\nconst trips = $(\"Get workations\").all().map((i) => i.json).filter((r) => r.workation_id);\nconst signups = $(\"Get signups\").all().map((i) => i.json).filter((r) => r.workation_id);\nconst profiles = $(\"Get profiles\").all().map((i) => i.json).filter((r) => r.user_sub);\n\nconst nameBySub = new Map(profiles.map((p) => [p.user_sub, p.name ?? \"\"]));\nconst profileBySub = new Map(profiles.map((p) => [p.user_sub, p]));\n// The Slack thread of the pitch each trip started as: \"Pitch decisions\"\n// sets a confirmed pitch's workation_id. A trip made by hand has none.\nconst threadByTrip = new Map(\n  $(\"Get pitches\")\n    .all()\n    .map((i) => i.json)\n    .filter((p) => p.workation_id && p.slack_url)\n    .map((p) => [p.workation_id, p.slack_url]),\n);\nconst orEmpty = (value) => (typeof value === \"string\" && value.trim() ? value.trim() : null);\n// Who has a spot (\"going\") or is waiting (\"waitlist\"), oldest row first, so\n// the waitlist is in line order. One entry per person. Every colleague gets\n// these lists: display fields only, and the caller flagged with isMe,\n// never anyone's sub or email.\nconst people = (workationId, status) => {\n  const seen = new Set();\n  return signups\n    .filter((s) => s.workation_id === workationId && s.status === status)\n    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))\n    .filter((s) => !seen.has(s.user_sub) && seen.add(s.user_sub))\n    .map((s) => {\n      const profile = profileBySub.get(s.user_sub) ?? {};\n      return {\n        name: profile.name ?? \"\",\n        team: orEmpty(profile.team),\n        jobTitle: orEmpty(profile.jobTitle),\n        isMe: s.user_sub === sub,\n      };\n    });\n};\n\nreturn [\n  {\n    json: {\n      workations: trips.map((row) => {\n        const organizerName = nameBySub.get(row.organizer);\n        const going = people(row.workation_id, \"going\");\n        const waitlist = people(row.workation_id, \"waitlist\");\n        return {\n          workationId: row.workation_id,\n          slug: row.slug,\n          title: row.title,\n          place: row.place,\n          // String columns, YYYY-MM-DD: sent exactly as stored.\n          startDate: row.start_date ?? \"\",\n          endDate: row.end_date ?? \"\",\n          description: row.description ?? \"\",\n          imageUrl: row.image_url ?? \"\",\n          imageAlt: row.image_alt ?? \"\",\n          // Carried over from the pitch by \"Pitch decisions\", or entered by hand.\n          accommodationUrl: row.accommodation_url ?? \"\",\n          costEstimate: typeof row.cost_estimate === \"number\" ? row.cost_estimate : null,\n          costIncludes: row.cost_includes ?? \"\",\n          // The pitch's discussion thread, or \"\" (see threadByTrip).\n          slackUrl: threadByTrip.get(row.workation_id) ?? \"\",\n          // The trip's Drive folder, once \"Trip Drive Folders\" has opened it\n          // to everyone at n8n.io (the morning after the trip ends), else \"\".\n          photosUrl: row.drive_domain_shared === true ? (row.drive_folder_url ?? \"\") : \"\",\n          attendees: going.length,\n          capacity: typeof row.capacity === \"number\" ? row.capacity : null,\n          waitlisted: waitlist.length,\n          going,\n          waitlist,\n          // Every colleague gets this list: display fields only,\n          // never the organizer's sub or email.\n          organizer: organizerName ? { name: organizerName } : null,\n        };\n      }),\n    },\n  },\n];"
+      },
+      "id": "39312241-41c1-4227-9337-1b2b4ca92371",
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a6f862b0-9901-4df8-b57e-9d7d607a11c6",
+      "position": [
+        1440,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "GET /workations": {
+      "main": [
+        [
+          {
+            "node": "Get workations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get workations": {
+      "main": [
+        [
+          {
+            "node": "Get signups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get signups": {
+      "main": [
+        [
+          {
+            "node": "Get profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get profiles": {
+      "main": [
+        [
+          {
+            "node": "Get pitches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build response": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get pitches": {
+      "main": [
+        [
+          {
+            "node": "Build response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "NQAi3FG6eVyC716s"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

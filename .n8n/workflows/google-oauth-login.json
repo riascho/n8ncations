@@ -1,0 +1,393 @@
+{
+  "name": "Google OAuth Login",
+  "nodes": [
+    {
+      "name": "OAuth Callback",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "59b0a4c4-5a90-4afc-b85b-a936f3489bd7",
+      "parameters": {
+        "multipleMethods": true,
+        "httpMethod": [
+          "GET"
+        ],
+        "path": "n8ncations/callback",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d17fb98a-dc30-4284-9cbf-df7f50783008",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Has code?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f0747226-1f55-4738-b94c-00c317139b84",
+              "leftValue": "={{ $json.query.code }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d3950ce7-a93f-4023-8301-0675fbc4ac75",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "request access_token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "onError": "continueErrorOutput",
+      "notes": "Client ID and secret are sent as HTTP Basic auth from the \"Google Client\" credential, never from the frontend.",
+      "notesInFlow": true,
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "OriMkew8RGfonuE5",
+          "name": "Google Client"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://oauth2.googleapis.com/token",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "code",
+              "value": "={{ $json.query.code }}"
+            },
+            {
+              "name": "grant_type",
+              "value": "authorization_code"
+            },
+            {
+              "name": "redirect_uri",
+              "value": "https://n8ncations.app.n8n.cloud/webhook/n8ncations/callback"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ee6f2d59-8ebd-4f28-a4ca-8c0e080ef78c",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Decode id_token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const idToken = $input.first().json.id_token ?? \"\";\nlet claims = {};\ntry {\n  claims = JSON.parse(Buffer.from(idToken.split(\".\")[1] ?? \"\", \"base64url\").toString(\"utf8\"));\n} catch {\n  claims = {};\n}\n// The token comes straight from Google's token endpoint over TLS, so\n// its signature is not re-checked. The Workspace domain is: an\n// Internal OAuth app already limits sign-in to n8n accounts, and this\n// keeps that true if the app is ever switched to External.\nconst allowed =\n  typeof claims.sub === \"string\" && claims.hd === \"n8n.io\" && claims.email_verified === true;\nreturn [{ json: { allowed, claims } }];"
+      },
+      "id": "123ddbc4-e123-46ae-94fb-adee24882825",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "n8n account?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e27e9c07-a94c-4a10-a3c5-c2e292198a44",
+              "leftValue": "={{ $json.allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "98842db5-081b-4faa-8163-cedf51b8707c",
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "name": "Upsert profile",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "RJwwx5BbhQRyJbzf",
+          "mode": "list",
+          "cachedResultName": "profiles",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/RJwwx5BbhQRyJbzf"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $json.claims.sub }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_sub": "={{ $json.claims.sub }}",
+            "email": "={{ $json.claims.email }}",
+            "name": "={{ [$json.claims.given_name, $json.claims.family_name].filter(Boolean).join(\" \") || $json.claims.name }}",
+            "picture": "={{ $json.claims.picture }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "user_sub",
+              "displayName": "user_sub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "picture",
+              "displayName": "picture",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "2bab70ae-10f6-487f-8fa3-3b2819e14344",
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "name": "Generate JWT",
+      "type": "n8n-nodes-base.jwt",
+      "typeVersion": 1,
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "parameters": {
+        "useJson": true,
+        "claimsJson": "={{ JSON.stringify({ sub: $('Decode id_token').first().json.claims.sub, email: $('Decode id_token').first().json.claims.email, name: $json.name, picture: $('Decode id_token').first().json.claims.picture ?? '', iat: Math.floor($now.toSeconds()), exp: Math.floor($now.plus(30, 'days').toSeconds()) }) }}",
+        "options": {}
+      },
+      "id": "76e95d52-5b18-48f1-93df-930c26470187",
+      "position": [
+        1440,
+        0
+      ]
+    },
+    {
+      "name": "Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "redirect",
+        "redirectURL": "={{ $vars.SITE_URL }}/#session={{ $json.token }}&state={{ encodeURIComponent($('OAuth Callback').first().json.query.state ?? '') }}",
+        "options": {}
+      },
+      "id": "648bab2e-63e9-4de7-a793-649518f0d47c",
+      "position": [
+        1680,
+        0
+      ]
+    },
+    {
+      "name": "Failure",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "redirect",
+        "redirectURL": "={{ $vars.SITE_URL }}/#error=access_denied&state={{ encodeURIComponent($('OAuth Callback').first().json.query.state ?? '') }}",
+        "options": {}
+      },
+      "id": "eb9462a1-13f8-4798-ab5c-fb8277b0409d",
+      "position": [
+        1920,
+        192
+      ]
+    }
+  ],
+  "connections": {
+    "OAuth Callback": {
+      "main": [
+        [
+          {
+            "node": "Has code?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has code?": {
+      "main": [
+        [
+          {
+            "node": "request access_token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "request access_token": {
+      "main": [
+        [
+          {
+            "node": "Decode id_token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode id_token": {
+      "main": [
+        [
+          {
+            "node": "n8n account?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "n8n account?": {
+      "main": [
+        [
+          {
+            "node": "Upsert profile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert profile": {
+      "main": [
+        [
+          {
+            "node": "Generate JWT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate JWT": {
+      "main": [
+        [
+          {
+            "node": "Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

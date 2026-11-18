@@ -1,0 +1,751 @@
+{
+  "name": "Slack Bot Notifier",
+  "nodes": [
+    {
+      "name": "When called",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "string"
+            },
+            {
+              "name": "pitchId",
+              "type": "string"
+            },
+            {
+              "name": "workationId",
+              "type": "string"
+            },
+            {
+              "name": "actorSub",
+              "type": "string"
+            },
+            {
+              "name": "promoteSub",
+              "type": "string"
+            },
+            {
+              "name": "before",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "d01d8830-bda8-425f-9320-130e721121e0",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get pitches",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "c3ae5698-90e4-423f-8658-fd5dacad8f87",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Get interest",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "rfdMCrRnPKnniv8o",
+          "mode": "list",
+          "cachedResultName": "pitch_interest",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/rfdMCrRnPKnniv8o"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "5c8cbb33-6218-427e-9de6-ce38b46915e5",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Get workations",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "KjtWQS5FT7kL7vnG",
+          "mode": "list",
+          "cachedResultName": "workations",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/KjtWQS5FT7kL7vnG"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "89c5b8f4-a691-4b30-bd34-9daea4b643f5",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Get signups",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "c823ab34-aa0b-41ec-b8ce-3d98b13b2d5f",
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "name": "Get profiles",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "RJwwx5BbhQRyJbzf",
+          "mode": "list",
+          "cachedResultName": "profiles",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/RJwwx5BbhQRyJbzf"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "7af1bb3e-703f-4d87-8393-cecf50431419",
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "name": "Build messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Called by the API workflows and \"Date Check & Status Updates\" with an\n// event and ids only. Everything a message needs is read here, after the\n// caller's writes, so the counts already include the change that triggered the event.\nconst input = $(\"When called\").first().json;\nconst event = input.event;\nconst pitchId = input.pitchId || \"\";\nconst workationId = input.workationId || \"\";\nconst actorSub = input.actorSub || \"\";\nconst promoteSub = input.promoteSub || \"\";\nconst site = $vars.SITE_URL;\n\nconst rows = (node) => $(node).all().map((i) => i.json);\nconst profiles = new Map(\n  rows(\"Get profiles\").filter((r) => r.user_sub).map((r) => [r.user_sub, r]),\n);\nconst pitch = pitchId ? rows(\"Get pitches\").find((r) => r.pitch_id === pitchId) : undefined;\nconst trip = workationId\n  ? rows(\"Get workations\").find((r) => r.workation_id === workationId)\n  : undefined;\nconst interested = new Set(\n  rows(\"Get interest\").filter((r) => r.pitch_id === pitchId).map((r) => r.user_sub),\n).size;\nconst signups = rows(\"Get signups\")\n  .filter((r) => r.workation_id === workationId)\n  .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));\nconst going = signups.filter((r) => r.status === \"going\");\nconst waitlist = signups.filter((r) => r.status === \"waitlist\");\n\n// Slack reads &, < and > as markup, so escape anything a colleague typed.\nconst esc = (value) =>\n  String(value ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\");\nconst quote = (value) => `> ${esc(value).replace(/\\n/g, \"\\n> \")}`;\nconst nameOf = (sub) => esc(profiles.get(sub)?.name || \"Someone\");\nconst organizerOf = (row) =>\n  profiles.get(row.organizer)?.name ? nameOf(row.organizer) : \"The organizer\";\nconst emailOf = (sub) => profiles.get(sub)?.email || \"\";\n// Dates are YYYY-MM-DD String columns. American English, like the site.\nconst day = (iso) => DateTime.fromISO(String(iso)).toFormat(\"LLL d, yyyy\");\nconst dates = (row) => `${day(row.start_date)} to ${day(row.end_date)}`;\nconst link = (path, text) => `<${site}${path}|${text}>`;\n// People in a message are written as placeholders, which \"Address messages\"\n// fills in once their Slack accounts are looked up: an @-mention in channel\n// posts, and in DMs to organizers a link that opens a DM with the person.\n// Both fall back to the plain name. `names` holds those names by email.\nconst names = {};\nconst tag = (kind, sub) => {\n  const email = emailOf(sub);\n  if (!email) return nameOf(sub);\n  names[email] = nameOf(sub);\n  return `{${kind}:${email}}`;\n};\nconst mention = (sub) => tag(\"mention\", sub);\nconst dmLink = (sub) => tag(\"dm\", sub);\n// \"1 person\", \"2 people\": counts go into sentences.\nconst people = (n) => (n === 1 ? \"1 person\" : `${n} people`);\n\nconst messages = [];\nconst dm = (sub, text) => {\n  if (sub && emailOf(sub)) messages.push({ target: \"dm\", lookupEmail: emailOf(sub), text });\n};\n// Only pitches the bot announced have a thread. Older ones get no replies.\n// Trip events pass the trip's pitch as `row`, since they have no pitchId.\nconst reply = (text, broadcast = false, row = pitch) => {\n  if (row?.slack_ts) {\n    messages.push({\n      target: \"thread\",\n      lookupEmail: \"\",\n      threadTs: String(row.slack_ts),\n      broadcast,\n      text,\n    });\n  }\n};\n\n// The channel post that opens a pitch's thread. Also used to edit that post\n// when the pitch changes, so the top of the thread always shows its details.\n// It links to the pitch's own page on the site, /pitches/<pitch_id>.\nconst announcement = (row) =>\n  `*New pitch: ${esc(row.place)}*\\n` +\n  `${dates(row)}. ${mention(row.organizer)} is pitching it. It goes ahead with ` +\n  `${row.threshold} interested people by ${day(row.deadline)}.\\n` +\n  (row.description ? `${quote(row.description)}\\n` : \"\") +\n  `${link(`/pitches/${encodeURIComponent(row.pitch_id)}`, \"See the pitch and register interest\")}. ` +\n  \"Questions or ideas? Reply in this thread.\";\n\nif (event === \"pitch_created\" && pitch) {\n  messages.push({\n    target: \"channel\",\n    lookupEmail: \"\",\n    text: announcement(pitch),\n  });\n}\n\n// An edit by the organizer: the post is rewritten with the current details,\n// and a reply in the thread lists what changed. A save that changed nothing\n// sends nothing.\nif (event === \"pitch_updated\" && pitch?.slack_ts) {\n  // The pitch as it was before the edit, sent by /pitch-update.\n  let before = {};\n  try {\n    before = JSON.parse(input.before || \"{}\");\n  } catch {\n    before = {};\n  }\n  const same = (key) => String(before[key] ?? \"\") === String(pitch[key] ?? \"\");\n  const size = (row) => (typeof row.capacity === \"number\" ? `up to ${row.capacity}` : \"no limit\");\n  const cost = (row) =>\n    typeof row.cost_estimate === \"number\" ? `€${row.cost_estimate} per person` : \"not estimated\";\n  const changes = [];\n  if (!same(\"place\")) changes.push(`Place: ${esc(before.place)} → ${esc(pitch.place)}`);\n  if (!same(\"start_date\") || !same(\"end_date\")) {\n    changes.push(`Dates: ${dates(before)} → ${dates(pitch)}`);\n  }\n  if (!same(\"deadline\")) changes.push(`Deadline: ${day(before.deadline)} → ${day(pitch.deadline)}`);\n  if (!same(\"threshold\")) changes.push(`Interest needed: ${before.threshold} → ${pitch.threshold}`);\n  if (!same(\"capacity\")) changes.push(`Group size: ${size(before)} → ${size(pitch)}`);\n  if (!same(\"cost_estimate\")) changes.push(`Cost: ${cost(before)} → ${cost(pitch)}`);\n  if (!same(\"cost_includes\")) {\n    changes.push(\n      pitch.cost_includes\n        ? `The cost now covers: ${esc(pitch.cost_includes)}`\n        : \"The cost no longer says what it covers\",\n    );\n  }\n  if (!same(\"accommodation_url\")) {\n    changes.push(\n      pitch.accommodation_url\n        ? `New accommodation link: <${esc(pitch.accommodation_url)}|See the place>`\n        : \"Accommodation link removed\",\n    );\n  }\n  if (!same(\"image_url\")) changes.push(pitch.image_url ? \"New photo on the pitch\" : \"Photo removed\");\n  if (!same(\"description\")) changes.push(`New description:\\n${quote(pitch.description)}`);\n  if (changes.length) {\n    messages.push({\n      target: \"update\",\n      ts: String(pitch.slack_ts),\n      lookupEmail: \"\",\n      text: announcement(pitch),\n    });\n    // Saving an expired pitch reopens it, so the thread's \"won't go ahead\"\n    // no longer holds. Also sent to the channel, like a new pitch.\n    const reopened = before.status === \"expired\" && pitch.status === \"open\";\n    const list = changes.map((c) => `• ${c}`).join(\"\\n\");\n    if (reopened) {\n      reply(\n        `${organizerOf(pitch)} reopened this pitch. Interest counts until ${day(pitch.deadline)}:\\n${list}`,\n        true,\n      );\n    } else {\n      reply(`${organizerOf(pitch)} updated this pitch:\\n${list}`);\n    }\n  }\n}\n\nif (\n  (event === \"interest_added\" || event === \"interest_removed\") &&\n  pitch &&\n  actorSub !== pitch.organizer\n) {\n  const tally = `${interested} of ${pitch.threshold} interested so far.`;\n  if (event === \"interest_added\") {\n    const enough =\n      interested >= pitch.threshold\n        ? \" Yay! 🥳 You've reached the minimum required people! Get ready to organize the next n8ncation!\"\n        : \"\";\n    dm(\n      pitch.organizer,\n      `${dmLink(actorSub)} is interested in your pitch for ${esc(pitch.place)}. ${tally}${enough}`,\n    );\n  } else {\n    dm(\n      pitch.organizer,\n      `${dmLink(actorSub)} is no longer interested in your pitch for ${esc(pitch.place)}. ${tally}`,\n    );\n  }\n}\n\nif (event === \"pitch_cancelled\" && pitch) {\n  reply(`${organizerOf(pitch)} cancelled this pitch:\\n${quote(pitch.cancel_reason)}`);\n}\n\nif (event === \"pitch_expired\" && pitch) {\n  reply(\n    `The deadline passed with ${interested} of ${pitch.threshold} interested, ` +\n      `so this trip won't go ahead. Have another idea? ${link(\"/pitch\", \"Pitch a trip\")}.`,\n  );\n}\n\nif (event === \"pitch_confirmed\" && pitch && trip) {\n  const tripLink = link(`/n8ncation/${trip.slug}`, `See ${esc(trip.title)}`);\n  // Everyone going except the organizer, each linked so a DM is one click.\n  const others = going\n    .filter((r) => r.user_sub !== trip.organizer)\n    .map((r) => dmLink(r.user_sub))\n    .join(\", \");\n  const waiting = waitlist.length\n    ? ` ${waitlist.length} more ${waitlist.length === 1 ? \"is\" : \"are\"} on the waitlist.`\n    : \"\";\n  // In the pitch's thread and, with \"Also send to channel\", in the channel.\n  reply(\n    `*${esc(trip.place)} is happening* as ${esc(trip.title)}, ${dates(trip)}.\\n` +\n      `${people(going.length)} ${going.length === 1 ? \"has\" : \"have\"} a spot.${waiting} A spot is confirmed once the ` +\n      \"deposit is paid. If a deposit doesn't come in, the next person on the \" +\n      `waitlist moves up.\\n${tripLink}`,\n    true,\n  );\n  dm(\n    trip.organizer,\n    `Your pitch for ${esc(trip.place)} reached its target and is now ${esc(trip.title)}. Next steps:\\n` +\n      (others ? `• Ask everyone going for their deposit: ${others}\\n` : \"\") +\n      \"• Book the accommodation once the deposits are in\\n\" +\n      `• Check everyone's logistics and the waitlist on the trip page\\n${tripLink}`,\n  );\n  for (const row of going) {\n    if (row.user_sub !== trip.organizer) {\n      dm(\n        row.user_sub,\n        `${esc(trip.place)} is happening, and you have a spot on ${esc(trip.title)}, ` +\n          `${dates(trip)}. ${organizerOf(trip)} will ask you for a deposit to confirm it.\\n${tripLink}`,\n      );\n    }\n  }\n  waitlist.forEach((row, index) =>\n    dm(\n      row.user_sub,\n      `${esc(trip.place)} is happening as ${esc(trip.title)}, ${dates(trip)}. It's full, ` +\n        `so you're number ${index + 1} on the waitlist. If a spot opens up, you move up ` +\n        `automatically and get a message here.\\n${tripLink}`,\n    ),\n  );\n}\n\n// The trip's photo folder, created by \"Trip Drive Folders\" on the morning\n// the trip starts. Announced in the thread of the pitch the trip came from;\n// a trip made by hand, or pitched before the bot, has no thread.\nif (event === \"photos_folder_created\" && trip?.drive_folder_url) {\n  const tripPitch = rows(\"Get pitches\").find((r) => r.workation_id === workationId);\n  reply(\n    `*The photo folder for ${esc(trip.title)} is open.* Everyone going can add their ` +\n      `photos and videos from ${esc(trip.place)}: <${trip.drive_folder_url}|Open the shared folder>. ` +\n      \"Drive emails each of you an invite. After the trip, everyone at n8n.io can view the \" +\n      `folder, and the photos show on the trip page.\\n` +\n      link(`/n8ncation/${trip.slug}`, `See ${esc(trip.title)}`),\n    false,\n    tripPitch,\n  );\n}\n\nif (event === \"rsvp_added\" && trip && actorSub !== trip.organizer) {\n  const mine = signups.find((r) => r.user_sub === actorSub);\n  const tripLink = link(`/n8ncation/${trip.slug}`, \"See the attendee list\");\n  if (mine?.status === \"going\") {\n    dm(\n      trip.organizer,\n      `${dmLink(actorSub)} signed up for ${esc(trip.title)} in ${esc(trip.place)}. ` +\n        `Ask them for their deposit to confirm their spot.\\n${tripLink}`,\n    );\n  } else if (mine?.status === \"waitlist\") {\n    dm(\n      trip.organizer,\n      `${dmLink(actorSub)} joined the waitlist for ${esc(trip.title)} in ${esc(trip.place)} ` +\n        `at number ${waitlist.indexOf(mine) + 1}.\\n${tripLink}`,\n    );\n  }\n}\n\nif (event === \"rsvp_cancelled\" && trip) {\n  const tripLink = link(`/n8ncation/${trip.slug}`, `See ${esc(trip.title)}`);\n  if (actorSub !== trip.organizer) {\n    const moved =\n      promoteSub && promoteSub !== trip.organizer\n        ? ` ${dmLink(promoteSub)} moved up from the waitlist and has the spot now. Ask them for their deposit.`\n        : \"\";\n    dm(\n      trip.organizer,\n      `${dmLink(actorSub)} cancelled their RSVP for ${esc(trip.title)} in ${esc(trip.place)}.${moved}\\n${tripLink}`,\n    );\n  }\n  if (promoteSub) {\n    dm(\n      promoteSub,\n      `A spot opened up on ${esc(trip.title)} in ${esc(trip.place)}, ${dates(trip)}, and ` +\n        `you've moved up from the waitlist: you're going. ${organizerOf(trip)} will ask ` +\n        `you for a deposit to confirm it.\\n${tripLink}`,\n    );\n  }\n}\n\nreturn messages.map((json) => ({ json: { ...json, names } }));"
+      },
+      "id": "750fedaa-3324-480d-b178-4bbab625ea61",
+      "position": [
+        1440,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "name": "Lookup Slack user",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "user",
+        "operation": "lookupByEmail",
+        "email": "={{ $json.email }}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "S3g5Ro8gzHcWP7h0",
+          "name": "n8ncations Bot"
+        }
+      },
+      "id": "c1abe4a3-55e1-4f2b-8db1-cb1bbaa9dde3",
+      "position": [
+        1680,
+        0
+      ]
+    },
+    {
+      "name": "Address messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Fills in the people in each message. \"Lookup Slack user\" keeps the order of\n// \"People to look up\" (a failed lookup still outputs an item). A DM to\n// someone without a Slack account is dropped, and a person who can't be\n// found is shown by name. A DM link uses Slack's slack://user deep link,\n// which opens a DM with that person in the Slack apps.\nconst emails = $(\"People to look up\").all().map((i) => i.json.email);\nconst accounts = new Map();\n$input.all().forEach((item, index) => {\n  if (item.json.id) accounts.set(emails[index], { id: item.json.id, team: item.json.team_id });\n});\nreturn $(\"Build messages\")\n  .all()\n  .flatMap((item) => {\n    const message = item.json;\n    const text = String(message.text).replace(\n      /\\{(mention|dm):([^}]+)\\}/g,\n      (placeholder, kind, email) => {\n        const account = accounts.get(email);\n        const name = message.names?.[email] ?? email;\n        if (!account) return name;\n        return kind === \"mention\"\n          ? `<@${account.id}>`\n          : `<slack://user?team=${account.team}&id=${account.id}|${name}>`;\n      },\n    );\n    if (message.target === \"dm\") {\n      const account = accounts.get(message.lookupEmail);\n      return account ? [{ json: { ...message, text, slackUserId: account.id } }] : [];\n    }\n    return [{ json: { ...message, text } }];\n  });"
+      },
+      "id": "16e932e2-7d3a-4c80-a998-2dbe55822e83",
+      "position": [
+        1920,
+        0
+      ]
+    },
+    {
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "renameOutput": true,
+              "outputKey": "dm",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "95d2c891-392f-4f16-ad0c-5ad6b2c103aa",
+                    "leftValue": "={{ $json.target }}",
+                    "rightValue": "dm",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "channel",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3ee3d06e-9129-402e-af7c-65e3da18e8ad",
+                    "leftValue": "={{ $json.target }}",
+                    "rightValue": "channel",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "thread",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ae54c66b-dd6e-47a9-973e-caeac1093bee",
+                    "leftValue": "={{ $json.target }}",
+                    "rightValue": "thread",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "renameOutput": true,
+              "outputKey": "update",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "58a9426b-8f07-4a3f-b998-f61e5a6b2ba2",
+                    "leftValue": "={{ $json.target }}",
+                    "rightValue": "update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e31c14aa-c970-4078-99be-5c941cc89854",
+      "position": [
+        2160,
+        0
+      ]
+    },
+    {
+      "name": "Send DM",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "authentication": "accessToken",
+        "select": "user",
+        "messageType": "text",
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "unfurl_links": false
+        },
+        "user": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.slackUserId }}"
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "S3g5Ro8gzHcWP7h0",
+          "name": "n8ncations Bot"
+        }
+      },
+      "id": "e18df835-4165-41c6-8bc0-af490a767924",
+      "position": [
+        2400,
+        -192
+      ]
+    },
+    {
+      "name": "Post to channel",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "authentication": "accessToken",
+        "select": "channel",
+        "messageType": "text",
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "unfurl_links": false
+        },
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $vars.SLACK_CHANNEL_ID }}"
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "S3g5Ro8gzHcWP7h0",
+          "name": "n8ncations Bot"
+        }
+      },
+      "id": "aa4d65a3-0db3-4ef9-a87d-df53a4cc9fc7",
+      "position": [
+        2400,
+        0
+      ]
+    },
+    {
+      "name": "Reply in thread",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "authentication": "accessToken",
+        "select": "channel",
+        "messageType": "text",
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "unfurl_links": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $json.threadTs }}",
+              "reply_broadcast": "={{ $json.broadcast }}"
+            }
+          }
+        },
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $vars.SLACK_CHANNEL_ID }}"
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "S3g5Ro8gzHcWP7h0",
+          "name": "n8ncations Bot"
+        }
+      },
+      "id": "727a4723-8caf-4bd0-98d0-979cc1a67368",
+      "position": [
+        2400,
+        192
+      ]
+    },
+    {
+      "name": "Get permalink",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "message",
+        "operation": "getPermalink",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $vars.SLACK_CHANNEL_ID }}"
+        },
+        "timestamp": "={{ $json.message_timestamp }}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "S3g5Ro8gzHcWP7h0",
+          "name": "n8ncations Bot"
+        }
+      },
+      "id": "1b6b429b-de8b-4524-b68c-099153a2c7b9",
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "name": "Save thread",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pitch_id",
+              "keyValue": "={{ $('When called').first().json.pitchId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "slack_ts": "={{ $('Post to channel').first().json.message_timestamp }}",
+            "slack_url": "={{ $json.permalink }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "slack_ts",
+              "displayName": "slack_ts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "slack_url",
+              "displayName": "slack_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "d1923c66-d28c-457b-85a8-ac42aab940e5",
+      "position": [
+        2880,
+        0
+      ]
+    },
+    {
+      "name": "Update post",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "message",
+        "operation": "update",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $vars.SLACK_CHANNEL_ID }}"
+        },
+        "ts": "={{ $json.ts }}",
+        "messageType": "text",
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "S3g5Ro8gzHcWP7h0",
+          "name": "n8ncations Bot"
+        }
+      },
+      "id": "3f310967-507e-4d14-94df-3b6fa03807a3",
+      "position": [
+        2240,
+        384
+      ]
+    },
+    {
+      "name": "People to look up",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Everyone the messages go to or name, once each, for \"Lookup Slack user\".\n// With nobody to look up (a thread reply that names no one), one empty item\n// keeps the run going; its lookup fails quietly.\nconst emails = new Set();\nfor (const { json } of $input.all()) {\n  if (json.lookupEmail) emails.add(json.lookupEmail);\n  for (const match of String(json.text).matchAll(/\\{(?:mention|dm):([^}]+)\\}/g)) {\n    emails.add(match[1]);\n  }\n}\nreturn emails.size\n  ? [...emails].map((email) => ({ json: { email } }))\n  : [{ json: { email: \"\" } }];"
+      },
+      "id": "ba1ee2ce-7a82-403f-a922-28942c1e7b7a",
+      "position": [
+        1456,
+        -192
+      ]
+    }
+  ],
+  "connections": {
+    "When called": {
+      "main": [
+        [
+          {
+            "node": "Get pitches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get pitches": {
+      "main": [
+        [
+          {
+            "node": "Get interest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get interest": {
+      "main": [
+        [
+          {
+            "node": "Get workations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get workations": {
+      "main": [
+        [
+          {
+            "node": "Get signups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get signups": {
+      "main": [
+        [
+          {
+            "node": "Get profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get profiles": {
+      "main": [
+        [
+          {
+            "node": "Build messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build messages": {
+      "main": [
+        [
+          {
+            "node": "People to look up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Slack user": {
+      "main": [
+        [
+          {
+            "node": "Address messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Address messages": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Send DM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post to channel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply in thread",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to channel": {
+      "main": [
+        [
+          {
+            "node": "Get permalink",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get permalink": {
+      "main": [
+        [
+          {
+            "node": "Save thread",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "People to look up": {
+      "main": [
+        [
+          {
+            "node": "Lookup Slack user",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "NQAi3FG6eVyC716s"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

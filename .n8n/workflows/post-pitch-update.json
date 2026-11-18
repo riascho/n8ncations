@@ -1,0 +1,520 @@
+{
+  "name": "/pitch-update",
+  "nodes": [
+    {
+      "name": "POST /pitch-update",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "e0753067-23c0-471f-b1dc-89c7b6cbac84",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pitch-update",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "02019529-27de-479c-a804-5258508f5d08",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get pitch",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pitch_id",
+              "keyValue": "={{ $json.body.pitchId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "941bff37-804e-4a6c-937b-037cc1538877",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Validate update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const request = $(\"POST /pitch-update\").first().json;\nconst sub = request.jwtPayload.sub;\nconst body = request.body ?? {};\nconst fail = (statusCode, message) => [{ json: { ok: false, statusCode, body: { message } } }];\n\nif (typeof body.pitchId !== \"string\") return fail(400, \"Send the pitchId of the pitch to change.\");\n// Only the organizer may change a pitch. A missing pitch and someone else's\n// get the same 404, so the answer doesn't reveal which. 404, not 403: the\n// frontend reads every 403 as an expired session.\nconst pitch = $(\"Get pitch\").all().map((i) => i.json).find((r) => r.pitch_id === body.pitchId);\nif (!pitch || pitch.organizer !== sub) return fail(404, \"We could not find that pitch.\");\n// An expired pitch can be edited too: saving it, with a deadline from today\n// (checked below), reopens it. Cancelled and confirmed ones are closed.\nif (pitch.status !== \"open\" && pitch.status !== \"expired\") return fail(400, \"This pitch is closed.\");\n\n// Same rules as POST /pitch and PITCH_LIMITS in src/features/pitches.ts.\nconst today = $today.toFormat(\"yyyy-MM-dd\");\nconst isDay = (value) => typeof value === \"string\" && /^\\d{4}-\\d{2}-\\d{2}$/.test(value);\nconst line = (value, max) =>\n  typeof value === \"string\" ? value.replace(/\\s+/g, \" \").trim().slice(0, max) : \"\";\nconst whole = (value) => (Number.isInteger(value) ? value : NaN);\n\nconst place = line(body.place, 60);\nconst description =\n  typeof body.description === \"string\"\n    ? body.description.replace(/[^\\S\\n]+/g, \" \").replace(/\\n{3,}/g, \"\\n\\n\").trim().slice(0, 600)\n    : \"\";\n// Optional: null means no limit, like a trip's capacity.\nconst capacity = body.capacity === null || body.capacity === undefined ? null : whole(body.capacity);\nconst threshold = whole(body.threshold);\nconst cost = body.costEstimate === null || body.costEstimate === undefined ? null : whole(body.costEstimate);\nconst url = line(body.accommodationUrl ?? \"\", 500);\nconst costIncludes = line(body.costIncludes ?? \"\", 200);\n// Not trimmed to length like the text fields: a cut-off link is a broken one.\nconst imageUrl = typeof body.imageUrl === \"string\" ? body.imageUrl.trim() : \"\";\nconst imageAlt = line(body.imageAlt ?? \"\", 150);\n\nif (!place) return fail(400, \"Add a place.\");\nif (!description) return fail(400, \"Describe the plan.\");\nif (!isDay(body.startDate) || body.startDate <= today) return fail(400, \"Pick a start date in the future.\");\nif (!isDay(body.endDate) || body.endDate < body.startDate) return fail(400, \"The trip ends before it starts.\");\nif (capacity !== null && !(capacity >= 2 && capacity <= 100)) {\n  return fail(400, \"Group size must be between 2 and 100, or empty for no limit.\");\n}\n// Always required: it decides whether the trip goes ahead.\nif (!(threshold >= 2 && threshold <= (capacity ?? 100))) {\n  return fail(\n    400,\n    capacity === null\n      ? \"Interest needed must be between 2 and 100.\"\n      : \"Interest needed must be between 2 and the group size.\",\n  );\n}\nif (!isDay(body.deadline) || body.deadline < today || body.deadline >= body.startDate) {\n  return fail(400, \"The deadline must be between today and the start date.\");\n}\nif (cost !== null && !(cost >= 0 && cost <= 10000)) {\n  return fail(400, \"Use a whole number of euros up to 10000.\");\n}\n// Rendered as an href, so only http(s) links are stored.\nif (url && !/^https?:\\/\\/[^\\s]+$/i.test(url)) return fail(400, \"Use a full link starting with https://.\");\n\n// A link to a photo hosted elsewhere; nothing is uploaded. https only: the\n// site is served over https, so an http image would be blocked anyway.\nif (imageUrl && (imageUrl.length > 1000 || !/^https:\\/\\/[^\\s]+$/i.test(imageUrl))) {\n  return fail(400, \"Use a photo link starting with https://.\");\n}\nif (imageUrl && !imageAlt) return fail(400, \"Describe the photo for people using a screen reader.\");\n\n// Every field is replaced and the status set to open. Interest and organizer\n// stay as they are.\nreturn [\n  {\n    json: {\n      ok: true,\n      pitch_id: body.pitchId,\n      organizer: sub,\n      // The status read above: \"Update pitch\" only writes while it's unchanged.\n      status: pitch.status,\n      // The pitch as it was, so \"Slack Bot Notifier\" can say in the thread what changed.\n      before: JSON.stringify({\n        status: pitch.status,\n        place: pitch.place,\n        start_date: pitch.start_date,\n        end_date: pitch.end_date,\n        description: pitch.description,\n        accommodation_url: pitch.accommodation_url,\n        image_url: pitch.image_url,\n        capacity: pitch.capacity,\n        threshold: pitch.threshold,\n        deadline: pitch.deadline,\n        cost_estimate: pitch.cost_estimate,\n        cost_includes: pitch.cost_includes,\n      }),\n      row: {\n        place,\n        start_date: body.startDate,\n        end_date: body.endDate,\n        description,\n        accommodation_url: url,\n        image_url: imageUrl,\n        // A description without a photo describes nothing.\n        image_alt: imageUrl ? imageAlt : \"\",\n        capacity,\n        threshold,\n        deadline: body.deadline,\n        cost_estimate: cost,\n        cost_includes: costIncludes,\n      },\n    },\n  },\n];"
+      },
+      "id": "fd82d7b3-5331-4294-8b16-6958349eb336",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b7b694ba-b4aa-4670-aaf6-09820c7bba16",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7e0893cc-71ee-4858-8b41-01de2cc567ef",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Update pitch",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pitch_id",
+              "keyValue": "={{ $('Validate update').first().json.pitch_id }}"
+            },
+            {
+              "keyName": "organizer",
+              "keyValue": "={{ $('Validate update').first().json.organizer }}"
+            },
+            {
+              "keyName": "status",
+              "keyValue": "={{ $('Validate update').first().json.status }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "place": "={{ $('Validate update').first().json.row.place }}",
+            "start_date": "={{ $('Validate update').first().json.row.start_date }}",
+            "end_date": "={{ $('Validate update').first().json.row.end_date }}",
+            "description": "={{ $('Validate update').first().json.row.description }}",
+            "accommodation_url": "={{ $('Validate update').first().json.row.accommodation_url }}",
+            "capacity": "={{ $('Validate update').first().json.row.capacity }}",
+            "threshold": "={{ $('Validate update').first().json.row.threshold }}",
+            "deadline": "={{ $('Validate update').first().json.row.deadline }}",
+            "cost_estimate": "={{ $('Validate update').first().json.row.cost_estimate }}",
+            "cost_includes": "={{ $('Validate update').first().json.row.cost_includes }}",
+            "image_url": "={{ $('Validate update').first().json.row.image_url }}",
+            "image_alt": "={{ $('Validate update').first().json.row.image_alt }}",
+            "status": "open"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "place",
+              "displayName": "place",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "start_date",
+              "displayName": "start_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "end_date",
+              "displayName": "end_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "accommodation_url",
+              "displayName": "accommodation_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "capacity",
+              "displayName": "capacity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "threshold",
+              "displayName": "threshold",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "deadline",
+              "displayName": "deadline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "cost_estimate",
+              "displayName": "cost_estimate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "cost_includes",
+              "displayName": "cost_includes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "image_url",
+              "displayName": "image_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "image_alt",
+              "displayName": "image_alt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e0ae6eeb-d06e-4298-9085-a60bc8c8f132",
+      "position": [
+        960,
+        -192
+      ]
+    },
+    {
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "66ef8d8e-ff45-4425-9be3-70fb056f78f5",
+      "position": [
+        1200,
+        -192
+      ]
+    },
+    {
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Validate update').first().json.body) }}",
+        "options": {
+          "responseCode": "={{ $('Validate update').first().json.statusCode }}"
+        }
+      },
+      "id": "8dc571ea-1412-45fa-9a02-8e19b462ae2c",
+      "position": [
+        960,
+        192
+      ]
+    },
+    {
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "executeOnce": true,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "6pNrfjbynQ4IXPM8",
+          "cachedResultName": "Slack Bot Notifier"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "pitch_updated",
+            "pitchId": "={{ $('Validate update').first().json.pitch_id }}",
+            "workationId": "",
+            "actorSub": "={{ $('POST /pitch-update').first().json.jwtPayload.sub }}",
+            "promoteSub": "",
+            "before": "={{ $('Validate update').first().json.before }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pitchId",
+              "displayName": "pitchId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workationId",
+              "displayName": "workationId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actorSub",
+              "displayName": "actorSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "promoteSub",
+              "displayName": "promoteSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "before",
+              "displayName": "before",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "12c13bf2-a234-46a9-af69-7c64d001671f",
+      "position": [
+        1344,
+        -192
+      ]
+    }
+  ],
+  "connections": {
+    "POST /pitch-update": {
+      "main": [
+        [
+          {
+            "node": "Get pitch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get pitch": {
+      "main": [
+        [
+          {
+            "node": "Validate update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate update": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "Update pitch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update pitch": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200": {
+      "main": [
+        [
+          {
+            "node": "Notify Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "NQAi3FG6eVyC716s"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

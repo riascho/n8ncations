@@ -212,7 +212,7 @@ export interface Pitch {
   organizer: Organizer | null;
   /** Link to the pitch's discussion thread in the team's Slack channel, or
       "" when it has none (pitched before the Slack bot, or the post failed).
-      Set by the "Slack notify" workflow when the pitch is announced. */
+      Set by the "Slack Bot Notifier" workflow when the pitch is announced. */
   slackUrl: string;
 }
 

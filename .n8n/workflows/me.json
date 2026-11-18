@@ -1,0 +1,385 @@
+{
+  "name": "/me",
+  "nodes": [
+    {
+      "name": "Webhook /me",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "41d3ee3c-c7a8-4a7b-aa52-3eec4a197691",
+      "parameters": {
+        "multipleMethods": true,
+        "httpMethod": ["GET", "POST"],
+        "path": "me",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "da65d681-c12a-4d8b-9ac2-f937a037f127",
+      "position": [0, 0]
+    },
+    {
+      "name": "Get profile",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "RJwwx5BbhQRyJbzf",
+          "mode": "list",
+          "cachedResultName": "profiles",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/RJwwx5BbhQRyJbzf"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Webhook /me').first().json.jwtPayload.sub }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "f2f7a06c-a579-4f91-9de6-fc7f45dbc368",
+      "position": [240, 0]
+    },
+    {
+      "name": "Get my signups",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Webhook /me').first().json.jwtPayload.sub }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "68c2630f-f222-47bb-92a6-1753147666ec",
+      "position": [480, 0]
+    },
+    {
+      "name": "Get waitlist rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "keyValue": "waitlist"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "974c158c-5f91-4acb-b3c6-12ef8aecd37d",
+      "position": [720, 0]
+    },
+    {
+      "name": "Get workations",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "KjtWQS5FT7kL7vnG",
+          "mode": "list",
+          "cachedResultName": "workations",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/KjtWQS5FT7kL7vnG"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "b278029c-49ad-4f97-ac20-12b185bb1fd4",
+      "position": [960, 0]
+    },
+    {
+      "name": "Get my votes",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tBShjtSsWwIPbUFu",
+          "mode": "list",
+          "cachedResultName": "votes",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/tBShjtSsWwIPbUFu"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Webhook /me').first().json.jwtPayload.sub }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "f52eb9c9-42fa-4d06-9d32-24b302a5413d",
+      "position": [1200, 0]
+    },
+    {
+      "name": "Build /mE",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const claims = $(\"Webhook /me\").first().json.jwtPayload;\nconst sub = claims.sub;\n// A colleague without a profile row still gets an answer, built from\n// the token, instead of no response at all.\nconst profile = $(\"Get profile\").all().map((i) => i.json).find((r) => r.user_sub === sub) ?? {};\nconst mine = $(\"Get my signups\").all().map((i) => i.json).filter((r) => r.workation_id);\nconst waiting = $(\"Get waitlist rows\").all().map((i) => i.json).filter((r) => r.workation_id);\nconst trips = $(\"Get workations\").all().map((i) => i.json).filter((r) => r.workation_id);\nconst voteRows = $(\"Get my votes\").all().map((i) => i.json).filter((r) => r.poll_id);\n\nconst toList = (value) => {\n  if (Array.isArray(value)) return value;\n  if (typeof value !== \"string\" || value.trim() === \"\") return [];\n  try {\n    const parsed = JSON.parse(value);\n    return Array.isArray(parsed) ? parsed : [];\n  } catch {\n    return [];\n  }\n};\n\n// Generic over poll_id. Newest row per poll, in case a race left two.\nconst latest = new Map();\nfor (const row of voteRows) {\n  const seen = latest.get(row.poll_id);\n  if (!seen || new Date(row.updatedAt) > new Date(seen.updatedAt)) {\n    latest.set(row.poll_id, row);\n  }\n}\nconst votes = {};\nfor (const [pollId, row] of latest) {\n  const selected = toList(row.options);\n  if (selected.length > 0) votes[pollId] = selected;\n}\n\nconst position = (row) =>\n  1 +\n  waiting.filter(\n    (w) =>\n      w.workation_id === row.workation_id &&\n      new Date(w.createdAt) < new Date(row.createdAt),\n  ).length;\n\nreturn [\n  {\n    json: {\n      sub,\n      name: profile.name || claims.name || \"\",\n      email: profile.email || claims.email || \"\",\n      picture: profile.picture || claims.picture || \"\",\n      team: profile.team || null,\n      jobTitle: profile.jobTitle || null,\n      votes,\n      signups: mine.filter((r) => r.status === \"going\").map((r) => r.workation_id),\n      waitlist: mine\n        .filter((r) => r.status === \"waitlist\")\n        .map((r) => ({ workationId: r.workation_id, position: position(r) })),\n      organizing: trips.filter((t) => t.organizer === sub).map((t) => t.workation_id),\n    },\n  },\n];"
+      },
+      "id": "1ff9a8bd-4aec-4547-8b96-babde2ec0c2a",
+      "position": [1440, 0]
+    },
+    {
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "66c52729-0175-42ea-b158-cecd93faf8b4",
+      "position": [1680, 0]
+    },
+    {
+      "name": "Tidy profile update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const request = $input.first().json;\nconst body = request.body ?? {};\n// Same cap and whitespace rules as the profile form.\nconst tidy = (value) => {\n  if (typeof value !== \"string\") return null;\n  const text = value.replace(/\\s+/g, \" \").trim().slice(0, 60);\n  return text === \"\" ? null : text;\n};\nreturn [\n  {\n    json: {\n      sub: request.jwtPayload.sub,\n      team: tidy(body.team),\n      jobTitle: tidy(body.jobTitle),\n    },\n  },\n];"
+      },
+      "id": "34e80bd3-2f41-46ee-94aa-443b29892406",
+      "position": [1920, 192]
+    },
+    {
+      "name": "Update profile",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "RJwwx5BbhQRyJbzf",
+          "mode": "list",
+          "cachedResultName": "profiles",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/RJwwx5BbhQRyJbzf"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $json.sub }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "team": "={{ $json.team }}",
+            "jobTitle": "={{ $json.jobTitle }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "team",
+              "displayName": "team",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "jobTitle",
+              "displayName": "jobTitle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "6b0aea0e-4d0a-415a-abc3-e10b3d299f98",
+      "position": [2160, 192]
+    },
+    {
+      "name": "Respond 204",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 204
+        }
+      },
+      "id": "955dc1bb-375e-495d-9a4b-062746d6ddd2",
+      "position": [2400, 192]
+    }
+  ],
+  "connections": {
+    "Get profile": {
+      "main": [
+        [
+          {
+            "node": "Get my signups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get my signups": {
+      "main": [
+        [
+          {
+            "node": "Get waitlist rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get waitlist rows": {
+      "main": [
+        [
+          {
+            "node": "Get workations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get workations": {
+      "main": [
+        [
+          {
+            "node": "Get my votes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get my votes": {
+      "main": [
+        [
+          {
+            "node": "Build /ME",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build /ME": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook /me": {
+      "main": [
+        [
+          {
+            "node": "Get profile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tidy profile update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tidy profile update": {
+      "main": [
+        [
+          {
+            "node": "Update profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update profile": {
+      "main": [
+        [
+          {
+            "node": "Respond 204",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

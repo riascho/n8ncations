@@ -1,0 +1,254 @@
+{
+  "name": "/roster",
+  "nodes": [
+    {
+      "name": "GET /roster",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "e988480f-9eba-4183-bbf0-edd5a0afffc9",
+      "parameters": {
+        "path": "roster",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "a2f261d9-7663-483c-a7c2-940c6dc6a067",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get trip",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "KjtWQS5FT7kL7vnG",
+          "mode": "list",
+          "cachedResultName": "workations",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/KjtWQS5FT7kL7vnG"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $json.query.workationId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "832de178-38e4-451e-8c92-a54c4407aa41",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Get trip signups",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $('GET /roster').first().json.query.workationId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "fb5ddcbf-7ef3-4ff3-91d7-34015c5e9785",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Get profiles",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "RJwwx5BbhQRyJbzf",
+          "mode": "list",
+          "cachedResultName": "profiles",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/RJwwx5BbhQRyJbzf"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "a4917baf-ca46-4f6b-82a6-739850d8a99e",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Get trip logistics",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "xGuYK2xYfdlCOmuT",
+          "mode": "list",
+          "cachedResultName": "logistics",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/xGuYK2xYfdlCOmuT"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $('GET /roster').first().json.query.workationId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "ca186553-1ffe-41a7-901e-bfc30a728486",
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "name": "Build roster",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const request = $(\"GET /roster\").first().json;\nconst sub = request.jwtPayload.sub;\nconst workationId = request.query?.workationId;\nconst trip = $(\"Get trip\").all().map((i) => i.json).find((r) => r.workation_id === workationId);\n\n// 404, not 403: the frontend reads every 403 as an expired session.\n// The same answer for \"no such trip\" and \"not yours\" reveals nothing.\nif (!trip || trip.organizer !== sub) {\n  return [\n    { json: { statusCode: 404, body: { message: \"We could not find that n8ncation.\" } } },\n  ];\n}\n\nconst rows = $(\"Get trip signups\")\n  .all()\n  .map((i) => i.json)\n  .filter((r) => r.workation_id === workationId)\n  .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));\nconst profiles = new Map(\n  $(\"Get profiles\").all().map((i) => i.json).filter((p) => p.user_sub).map((p) => [p.user_sub, p]),\n);\nconst logistics = new Map(\n  $(\"Get trip logistics\").all().map((i) => i.json).filter((l) => l.user_sub).map((l) => [l.user_sub, l]),\n);\nconst pick = (value) => (typeof value === \"string\" && value !== \"\" ? value : null);\n\nconst going = rows.filter((r) => r.status === \"going\");\nconst waiting = rows.filter((r) => r.status === \"waitlist\");\nconst entry = (row, position) => {\n  const person = profiles.get(row.user_sub) ?? {};\n  const l = logistics.get(row.user_sub);\n  return {\n    name: person.name ?? \"\",\n    email: person.email ?? \"\",\n    team: person.team || null,\n    status: row.status,\n    position,\n    logistics: l\n      ? {\n          dietary: pick(l.dietary),\n          roomPreference: pick(l.room_preference),\n          emergencyContact: pick(l.emergency_contact),\n          expectations: pick(l.expectations),\n        }\n      : null,\n  };\n};\n\nreturn [\n  {\n    json: {\n      statusCode: 200,\n      body: {\n        people: [\n          ...going.map((row) => entry(row, null)),\n          ...waiting.map((row, index) => entry(row, index + 1)),\n        ],\n      },\n    },\n  },\n];"
+      },
+      "id": "f05c414e-60ed-4201-8a34-5028284f07a1",
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      },
+      "id": "a8bc09bf-2533-4f6c-8fbe-9fb5f52b15bb",
+      "position": [
+        1440,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "GET /roster": {
+      "main": [
+        [
+          {
+            "node": "Get trip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get trip": {
+      "main": [
+        [
+          {
+            "node": "Get trip signups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get trip signups": {
+      "main": [
+        [
+          {
+            "node": "Get profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get profiles": {
+      "main": [
+        [
+          {
+            "node": "Get trip logistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get trip logistics": {
+      "main": [
+        [
+          {
+            "node": "Build roster",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build roster": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

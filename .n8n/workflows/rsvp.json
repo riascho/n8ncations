@@ -1,0 +1,934 @@
+{
+  "name": "/rsvp",
+  "nodes": [
+    {
+      "name": "POST /rsvp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "711394d2-6a7f-42fc-aab8-49f864e97bb5",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsvp",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "f2fe9b08-ad10-4087-913f-6e5522d211f5",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get trip",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "KjtWQS5FT7kL7vnG",
+          "mode": "list",
+          "cachedResultName": "workations",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/KjtWQS5FT7kL7vnG"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $json.body.workationId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "59bf0614-7fa2-4f69-bd8d-ed54469eeeb4",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Get trip signups",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $('POST /rsvp').first().json.body.workationId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "47c12aeb-42e9-493a-869e-2e9af9920f21",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const request = $(\"POST /rsvp\").first().json;\nconst sub = request.jwtPayload.sub;\nconst { workationId, attending } = request.body ?? {};\nconst fail = (statusCode, message) => [\n  { json: { action: \"answer\", statusCode, body: { message } } },\n];\n\nif (typeof workationId !== \"string\" || typeof attending !== \"boolean\") {\n  return fail(400, \"Send a workationId and attending: true or false.\");\n}\nconst trip = $(\"Get trip\").all().map((i) => i.json).find((r) => r.workation_id === workationId);\nif (!trip) return fail(404, \"We could not find that n8ncation.\");\n// String column, YYYY-MM-DD, so it compares correctly as text. RSVPs\n// stay open through the last day, like the frontend's isPast().\nif (String(trip.end_date) < $today.toFormat(\"yyyy-MM-dd\")) {\n  return fail(400, \"This n8ncation has already happened.\");\n}\n\nconst rows = $(\"Get trip signups\")\n  .all()\n  .map((i) => i.json)\n  .filter((r) => r.workation_id === workationId)\n  .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));\nconst mine = rows.find((r) => r.user_sub === sub);\nconst waiting = rows.filter((r) => r.status === \"waitlist\");\nconst going = rows.filter((r) => r.status === \"going\").length;\nconst positionOf = (who) => {\n  const index = waiting.findIndex((r) => r.user_sub === who);\n  return index < 0 ? null : index + 1;\n};\n\nif (attending) {\n  if (mine) {\n    return [\n      {\n        json: {\n          action: \"answer\",\n          statusCode: 200,\n          body: { status: mine.status, position: positionOf(sub) },\n        },\n      },\n    ];\n  }\n  const full = typeof trip.capacity === \"number\" && going >= trip.capacity;\n  const status = full ? \"waitlist\" : \"going\";\n  return [\n    {\n      json: {\n        action: \"insert\",\n        statusCode: 200,\n        body: { status, position: full ? waiting.length + 1 : null },\n        row: { workation_id: workationId, user_sub: sub, status },\n      },\n    },\n  ];\n}\n\nif (!mine) return [{ json: { action: \"nothing\" } }];\n// Giving up a spot hands it to whoever has waited longest.\nconst next = mine.status === \"going\" ? waiting[0] : undefined;\nreturn [\n  {\n    json: {\n      action: \"delete\",\n      row: { workation_id: workationId, user_sub: sub },\n      promoteSub: next ? next.user_sub : \"\",\n    },\n  },\n];"
+      },
+      "id": "51c8bed0-7ad2-426e-8f48-f4913fdea296",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Insert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1af2394b-584d-4d26-b263-d71579575847",
+              "leftValue": "={{ $json.action === \"insert\" }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b3d6d08f-7c44-4cdf-a3d0-82ca661255f4",
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "name": "Insert signup",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "workation_id": "={{ $('Decide').first().json.row.workation_id }}",
+            "user_sub": "={{ $('Decide').first().json.row.user_sub }}",
+            "status": "={{ $('Decide').first().json.row.status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "workation_id",
+              "displayName": "workation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "user_sub",
+              "displayName": "user_sub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b8f9818f-7097-4ff2-accc-5aa29ecb0e35",
+      "position": [
+        1200,
+        -192
+      ]
+    },
+    {
+      "name": "Respond JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Decide').first().json.body) }}",
+        "options": {
+          "responseCode": "={{ $('Decide').first().json.statusCode }}"
+        }
+      },
+      "id": "7a3d1b0d-0fae-491a-ba2c-6219b58c93f2",
+      "position": [
+        1440,
+        -192
+      ]
+    },
+    {
+      "name": "Delete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "17227fd0-a2df-46ca-b808-eb9aa679274f",
+              "leftValue": "={{ $json.action === \"delete\" }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "44f03225-9167-4b1b-ae48-d01141fd2559",
+      "position": [
+        1680,
+        192
+      ]
+    },
+    {
+      "name": "Delete signup",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $('Decide').first().json.row.workation_id }}"
+            },
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Decide').first().json.row.user_sub }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "adf3a32a-ec24-40b5-b6e8-17a7503fef2e",
+      "position": [
+        1920,
+        192
+      ]
+    },
+    {
+      "name": "Delete their logistics",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "xGuYK2xYfdlCOmuT",
+          "mode": "list",
+          "cachedResultName": "logistics",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/xGuYK2xYfdlCOmuT"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $('Decide').first().json.row.workation_id }}"
+            },
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Decide').first().json.row.user_sub }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f835eb56-f6f3-4f5b-a272-00bc08c74e17",
+      "position": [
+        2160,
+        192
+      ]
+    },
+    {
+      "name": "Promote someone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cb80660c-ac82-4848-9395-fc801e717715",
+              "leftValue": "={{ $('Decide').first().json.promoteSub !== \"\" }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b9959c85-ca9d-4103-86ba-47f5265ce7b5",
+      "position": [
+        2400,
+        192
+      ]
+    },
+    {
+      "name": "Give spot to next in line",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "iyFUCcgHsGVec8Ra",
+          "mode": "list",
+          "cachedResultName": "signups",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/iyFUCcgHsGVec8Ra"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workation_id",
+              "keyValue": "={{ $('Decide').first().json.row.workation_id }}"
+            },
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Decide').first().json.promoteSub }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "going"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "c238de02-8663-4c8a-85ba-b3550154039e",
+      "position": [
+        2640,
+        192
+      ]
+    },
+    {
+      "name": "Respond 204",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 204
+        }
+      },
+      "id": "db3a0cca-670d-487a-afb9-052edf0c5bcf",
+      "position": [
+        2880,
+        192
+      ]
+    },
+    {
+      "name": "Nothing to cancel?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "37e2b2a3-39bb-4a61-9ba0-cbe7c40d6e69",
+              "leftValue": "={{ $json.action === \"nothing\" }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "555733be-c8bf-4e72-a08d-b71a16465d18",
+      "position": [
+        3120,
+        448
+      ]
+    },
+    {
+      "name": "Signed up?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "executeOnce": true,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9b78563b-8157-40ea-b7e7-ef63694e93ed",
+              "leftValue": "={{ $('Decide').first().json.action === 'insert' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b31e5b71-45e5-48c8-9858-82e98e5dd5f1",
+      "position": [
+        1680,
+        -192
+      ]
+    },
+    {
+      "name": "Notify sign-up",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "6pNrfjbynQ4IXPM8",
+          "cachedResultName": "Slack Bot Notifier"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "rsvp_added",
+            "pitchId": "",
+            "workationId": "={{ $('Decide').first().json.row.workation_id }}",
+            "actorSub": "={{ $('POST /rsvp').first().json.jwtPayload.sub }}",
+            "promoteSub": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pitchId",
+              "displayName": "pitchId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workationId",
+              "displayName": "workationId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actorSub",
+              "displayName": "actorSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "promoteSub",
+              "displayName": "promoteSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "c06c611e-d297-4d3d-8a47-991c04813887",
+      "position": [
+        1920,
+        -192
+      ],
+      "executeOnce": true
+    },
+    {
+      "name": "Cancelled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "executeOnce": true,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fd0e28e7-789a-402a-a093-c4dbdad34ef6",
+              "leftValue": "={{ $('Decide').first().json.action === 'delete' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fc928c91-068b-4ce3-93f6-89be9b9e18c0",
+      "position": [
+        3120,
+        192
+      ]
+    },
+    {
+      "name": "Notify cancellation",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "6pNrfjbynQ4IXPM8",
+          "cachedResultName": "Slack Bot Notifier"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "rsvp_cancelled",
+            "pitchId": "",
+            "workationId": "={{ $('Decide').first().json.row.workation_id }}",
+            "actorSub": "={{ $('POST /rsvp').first().json.jwtPayload.sub }}",
+            "promoteSub": "={{ $('Decide').first().json.promoteSub }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pitchId",
+              "displayName": "pitchId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workationId",
+              "displayName": "workationId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actorSub",
+              "displayName": "actorSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "promoteSub",
+              "displayName": "promoteSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "d92f80fa-88c0-4d64-ad9f-dac3336620d5",
+      "position": [
+        3360,
+        192
+      ],
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "POST /rsvp": {
+      "main": [
+        [
+          {
+            "node": "Get trip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get trip": {
+      "main": [
+        [
+          {
+            "node": "Get trip signups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get trip signups": {
+      "main": [
+        [
+          {
+            "node": "Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide": {
+      "main": [
+        [
+          {
+            "node": "Insert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert?": {
+      "main": [
+        [
+          {
+            "node": "Insert signup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert signup": {
+      "main": [
+        [
+          {
+            "node": "Respond JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete?": {
+      "main": [
+        [
+          {
+            "node": "Delete signup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nothing to cancel?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete signup": {
+      "main": [
+        [
+          {
+            "node": "Delete their logistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete their logistics": {
+      "main": [
+        [
+          {
+            "node": "Promote someone?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Promote someone?": {
+      "main": [
+        [
+          {
+            "node": "Give spot to next in line",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 204",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Give spot to next in line": {
+      "main": [
+        [
+          {
+            "node": "Respond 204",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nothing to cancel?": {
+      "main": [
+        [
+          {
+            "node": "Respond 204",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond JSON": {
+      "main": [
+        [
+          {
+            "node": "Signed up?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signed up?": {
+      "main": [
+        [
+          {
+            "node": "Notify sign-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 204": {
+      "main": [
+        [
+          {
+            "node": "Cancelled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancelled?": {
+      "main": [
+        [
+          {
+            "node": "Notify cancellation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "NQAi3FG6eVyC716s"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

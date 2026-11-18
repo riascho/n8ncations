@@ -1,0 +1,145 @@
+{
+  "name": "/polls",
+  "nodes": [
+    {
+      "name": "GET /polls",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "c6899234-6af8-49e4-9070-d0430b29c84f",
+      "parameters": {
+        "path": "polls",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "0009da74-41ca-479f-841b-341a79429592",
+      "position": [0, 0]
+    },
+    {
+      "name": "Get options",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "G9VDtTsSs9fNXvmw",
+          "mode": "list",
+          "cachedResultName": "poll options",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/G9VDtTsSs9fNXvmw"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "b489603b-19a1-431f-a9c2-1ca9006fad25",
+      "position": [240, 0]
+    },
+    {
+      "name": "Get votes",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tBShjtSsWwIPbUFu",
+          "mode": "list",
+          "cachedResultName": "votes",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/tBShjtSsWwIPbUFu"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "db2d59c8-7623-46e9-a8f4-d32a04c36698",
+      "position": [480, 0]
+    },
+    {
+      "name": "Aggregate poll results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const optionRows = $(\"Get options\").all().map((i) => i.json).filter((r) => r.poll_id);\nconst voteRows = $(\"Get votes\").all().map((i) => i.json).filter((r) => r.poll_id);\n\n// One row per person per poll is intended, but the upsert is not\n// atomic, so keep only the newest row per (poll_id, user_sub).\nconst latest = new Map();\nfor (const row of voteRows) {\n  const key = `${row.poll_id}::${row.user_sub}`;\n  const seen = latest.get(key);\n  if (!seen || new Date(row.updatedAt) > new Date(seen.updatedAt)) latest.set(key, row);\n}\n\nconst byPoll = new Map();\nconst poll = (id) => {\n  if (!byPoll.has(id)) byPoll.set(id, { pollId: id, options: new Map(), voters: 0 });\n  return byPoll.get(id);\n};\nfor (const row of optionRows) {\n  poll(row.poll_id).options.set(row.value, {\n    value: row.value,\n    count: 0,\n    suggested: row.created_by_sub !== \"seed\",\n  });\n}\nfor (const row of latest.values()) {\n  let selected;\n  try {\n    selected = JSON.parse(row.options);\n  } catch {\n    selected = [];\n  }\n  if (!Array.isArray(selected) || selected.length === 0) continue;\n  const p = poll(row.poll_id);\n  p.voters += 1;\n  for (const value of selected) {\n    const option = p.options.get(value);\n    // Values no longer on the option list are ignored.\n    if (option) option.count += 1;\n  }\n}\n\nreturn [\n  {\n    json: {\n      polls: [...byPoll.values()].map((p) => ({\n        pollId: p.pollId,\n        voters: p.voters,\n        options: [...p.options.values()],\n      })),\n    },\n  },\n];"
+      },
+      "id": "8207e5f4-e180-4d7a-867b-fb11989889a8",
+      "position": [720, 0]
+    },
+    {
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "0a126b87-9740-475f-baca-c06da18b6ca5",
+      "position": [960, 0]
+    }
+  ],
+  "connections": {
+    "GET /polls": {
+      "main": [
+        [
+          {
+            "node": "Get options",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get options": {
+      "main": [
+        [
+          {
+            "node": "Get votes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get votes": {
+      "main": [
+        [
+          {
+            "node": "Aggregate poll results1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate poll results1": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

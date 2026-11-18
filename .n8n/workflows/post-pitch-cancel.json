@@ -1,0 +1,387 @@
+{
+  "name": "/pitch-cancel",
+  "nodes": [
+    {
+      "name": "POST /pitch-cancel",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "781d86cb-5d9e-4a03-9a10-7ff76564a83e",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pitch-cancel",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "f0998470-2cb9-4c17-b1ee-3954ed52c0a1",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get pitch",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pitch_id",
+              "keyValue": "={{ $json.body.pitchId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "65bb2418-10e6-442e-aa1c-5ed7b07134c7",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Validate cancel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const request = $(\"POST /pitch-cancel\").first().json;\nconst sub = request.jwtPayload.sub;\nconst body = request.body ?? {};\nconst fail = (statusCode, message) => [{ json: { ok: false, statusCode, body: { message } } }];\n\nif (typeof body.pitchId !== \"string\") return fail(400, \"Send the pitchId of the pitch to cancel.\");\n// Only the organizer may change a pitch. A missing pitch and someone else's\n// get the same 404, so the answer doesn't reveal which. 404, not 403: the\n// frontend reads every 403 as an expired session.\nconst pitch = $(\"Get pitch\").all().map((i) => i.json).find((r) => r.pitch_id === body.pitchId);\nif (!pitch || pitch.organizer !== sub) return fail(404, \"We could not find that pitch.\");\nif (pitch.status !== \"open\") return fail(400, \"This pitch is closed.\");\n\n// Same cap as PITCH_LIMITS.cancelReason in src/features/pitches.ts. Line\n// breaks are kept, like the description.\nconst reason =\n  typeof body.reason === \"string\"\n    ? body.reason.replace(/[^\\S\\n]+/g, \" \").replace(/\\n{3,}/g, \"\\n\\n\").trim().slice(0, 300)\n    : \"\";\nif (!reason) return fail(400, \"Say why you’re cancelling the pitch.\");\n\n// Interest rows are kept. \"Pitch decisions\" only reads open pitches, so a\n// cancelled one is never confirmed or expired.\nreturn [\n  {\n    json: {\n      ok: true,\n      pitch_id: body.pitchId,\n      organizer: sub,\n      row: { status: \"cancelled\", cancel_reason: reason },\n    },\n  },\n];"
+      },
+      "id": "71ac59d3-ac48-4d0a-ad0b-5459b9042616",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4413273c-b673-4ae5-a405-a2d0a86b7bc0",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f58209b0-a068-4de7-bb05-684eefea47b5",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Update pitch",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pitch_id",
+              "keyValue": "={{ $('Validate cancel').first().json.pitch_id }}"
+            },
+            {
+              "keyName": "organizer",
+              "keyValue": "={{ $('Validate cancel').first().json.organizer }}"
+            },
+            {
+              "keyName": "status",
+              "keyValue": "open"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "={{ $('Validate cancel').first().json.row.status }}",
+            "cancel_reason": "={{ $('Validate cancel').first().json.row.cancel_reason }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "cancel_reason",
+              "displayName": "cancel_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "407e31de-36db-4837-bae0-b90d1e4956fa",
+      "position": [
+        960,
+        -192
+      ]
+    },
+    {
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "02019529-27de-479c-a804-5258508f5d09",
+      "position": [
+        1200,
+        -192
+      ]
+    },
+    {
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Validate cancel').first().json.body) }}",
+        "options": {
+          "responseCode": "={{ $('Validate cancel').first().json.statusCode }}"
+        }
+      },
+      "id": "e0753067-23c0-471f-b1dc-89c7b6cbac85",
+      "position": [
+        960,
+        192
+      ]
+    },
+    {
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "6pNrfjbynQ4IXPM8",
+          "cachedResultName": "Slack Bot Notifier"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "pitch_cancelled",
+            "pitchId": "={{ $('Validate cancel').first().json.pitch_id }}",
+            "workationId": "",
+            "actorSub": "={{ $('POST /pitch-cancel').first().json.jwtPayload.sub }}",
+            "promoteSub": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pitchId",
+              "displayName": "pitchId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workationId",
+              "displayName": "workationId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actorSub",
+              "displayName": "actorSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "promoteSub",
+              "displayName": "promoteSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "88569ea0-04a8-4b5e-933f-1894ef15fb58",
+      "position": [
+        1440,
+        -192
+      ],
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "POST /pitch-cancel": {
+      "main": [
+        [
+          {
+            "node": "Get pitch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get pitch": {
+      "main": [
+        [
+          {
+            "node": "Validate cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate cancel": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "Update pitch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update pitch": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200": {
+      "main": [
+        [
+          {
+            "node": "Notify Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "NQAi3FG6eVyC716s"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

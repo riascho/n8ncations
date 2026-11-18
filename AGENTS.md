@@ -1,6 +1,6 @@
 # AGENTS.md
 
-n8ncations is an internal site for planning n8n team workations. The frontend in this repo is a static Vite + TypeScript site with no framework. The backend is n8n workflows backed by n8n Data Tables. Those workflows run on the n8n instance, not from this repo. README.md documents the architecture and the API contract; `.n8n/` documents the backend: how each workflow behaves, the Data Tables, importable workflow blueprints (`.n8n/workflows/`), and known differences between the live instance and the contract (`.n8n/DISCREPANCIES.md`). Read both before making non-trivial changes.
+n8ncations is an internal site for planning n8n team workations. The frontend in this repo is a static Vite + TypeScript site with no framework. The backend is n8n workflows backed by n8n Data Tables. Those workflows run on the n8n instance, not from this repo. README.md documents the architecture and the API contract; `.n8n/` documents the backend: how each workflow behaves, the Data Tables, and importable workflow blueprints (`.n8n/workflows/`). Read both before making non-trivial changes.
 
 ## Commands
 
@@ -36,9 +36,20 @@ Before you design or build any UI, read n8ndesign.md and follow it exactly: colo
 - **No runtime dependencies.** Ask before adding any package.
 - Never put secrets in `VITE_*` variables. They ship in the browser bundle.
 
+## Public repository
+
+This repo is public. Before handing back any change, check the diff for internal company data and remove it. Take extra care in `.n8n/`, which is copied from the live instance.
+
+- **No secrets:** credential values, tokens, API keys, signing keys or OAuth client secrets. Blueprints refer to credentials by id and name only.
+- **No personal data:** real people's names, emails, or Slack or Google user ids, and nothing copied from Data Table rows or executions. Keep `pinData` empty (`{}`) in blueprints.
+- **No internal names:** real trip places or dates, Slack channel names or ids, Drive folder ids, or internal team names. Use placeholders such as `Example Town, Country` or "the workations Slack channel". Ids the workflows need belong in instance variables (`$vars`), not in the blueprint.
+- Ids of the n8n project, folders, workflows, Data Tables and credentials are fine. They are useless without access to the instance.
+
+If you're not sure whether something counts as internal, leave it out and ask me.
+
 ## Backend changes (n8n)
 
-I build and edit the n8n workflows myself. If a change needs the backend to change (a new route, a new field, a different response shape), don't work around it in the frontend with tolerant parsing or shims. Instead, tell me exactly what to change in which workflow and node, and update the contract in `types.ts` and README.md to match. Update the affected blueprint in `.n8n/workflows/` and its description in `.n8n/README.md` in the same change. The n8n MCP can read the live workflows and Data Tables: use it to check the live state, and log anything that differs from the contract in `.n8n/DISCREPANCIES.md`. Don't change the live instance through the MCP unless I ask you to.
+I build and edit the n8n workflows myself. If a change needs the backend to change (a new route, a new field, a different response shape), don't work around it in the frontend with tolerant parsing or shims. Instead, tell me exactly what to change in which workflow and node, and update the contract in `types.ts` and README.md to match. Update the affected blueprint in `.n8n/workflows/` and its description in `.n8n/README.md` in the same change. The n8n MCP can read the live workflows and Data Tables: use it to check the live state, and report anything that differs from the contract to me in your reply, naming the workflow and node. Don't change the live instance through the MCP unless I ask you to.
 
 ### Working with the n8n MCP
 

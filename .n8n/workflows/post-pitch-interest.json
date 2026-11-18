@@ -1,0 +1,597 @@
+{
+  "name": "/pitch-interest",
+  "nodes": [
+    {
+      "name": "POST /pitch-interest",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "d60621cb-b131-4843-8538-c67223cbadae",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pitch-interest",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "f7399956-5660-47d1-83c6-4331a92ce353",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Get pitch",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "HrVYqc8LY5XsAf8w",
+          "mode": "list",
+          "cachedResultName": "pitches",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/HrVYqc8LY5XsAf8w"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pitch_id",
+              "keyValue": "={{ $json.body.pitchId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "4c2bb7cc-ae15-410a-9fd4-a1cc03ed67a2",
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "name": "Validate interest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const request = $(\"POST /pitch-interest\").first().json;\nconst { pitchId, interested } = request.body ?? {};\nconst fail = (statusCode, message) => [\n  { json: { ok: false, statusCode, body: { message } } },\n];\nif (typeof pitchId !== \"string\" || typeof interested !== \"boolean\") {\n  return fail(400, \"Send a pitchId and interested: true or false.\");\n}\nconst pitch = $(\"Get pitch\").all().map((i) => i.json).find((r) => r.pitch_id === pitchId);\nif (!pitch) return fail(404, \"We could not find that pitch.\");\nif (pitch.status !== \"open\") return fail(400, \"This pitch is closed.\");\nif (String(pitch.deadline) < $today.toFormat(\"yyyy-MM-dd\")) {\n  return fail(400, \"The deadline for this pitch has passed.\");\n}\n// The upsert can't tell a new row from a repeat, so compare with what was\n// stored before. Only a real change notifies the organizer.\nconst sub = request.jwtPayload.sub;\nconst wasInterested = $(\"Get pitch interest\")\n  .all()\n  .some((i) => i.json.pitch_id === pitchId && i.json.user_sub === sub);\nreturn [\n  {\n    json: {\n      ok: true,\n      interested,\n      pitch_id: pitchId,\n      user_sub: sub,\n      changed: interested !== wasInterested,\n    },\n  },\n];"
+      },
+      "id": "cede9f59-69e3-48e7-a005-1ac7df6dd1e0",
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "14823df9-3037-4646-8ffe-ebb13fd2b4ec",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2fe4529c-333d-4c12-9fbb-9d38126dd53d",
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "name": "Interested?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a20a2e8a-543f-4204-a9cc-8ceb8882c90d",
+              "leftValue": "={{ $json.interested }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "53a67e01-256c-4936-8946-41c11d1274b3",
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "name": "Upsert interest",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "rfdMCrRnPKnniv8o",
+          "mode": "list",
+          "cachedResultName": "pitch_interest",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/rfdMCrRnPKnniv8o"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pitch_id",
+              "keyValue": "={{ $('Validate interest').first().json.pitch_id }}"
+            },
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Validate interest').first().json.user_sub }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "pitch_id": "={{ $('Validate interest').first().json.pitch_id }}",
+            "user_sub": "={{ $('Validate interest').first().json.user_sub }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "pitch_id",
+              "displayName": "pitch_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "user_sub",
+              "displayName": "user_sub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "884be9ab-4683-457a-98cc-f0624f46e74d",
+      "position": [
+        1200,
+        -192
+      ]
+    },
+    {
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "e656afb0-1137-4097-bddb-2d25135419bc",
+      "position": [
+        1440,
+        -192
+      ]
+    },
+    {
+      "name": "Delete interest",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "rfdMCrRnPKnniv8o",
+          "mode": "list",
+          "cachedResultName": "pitch_interest",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/rfdMCrRnPKnniv8o"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pitch_id",
+              "keyValue": "={{ $('Validate interest').first().json.pitch_id }}"
+            },
+            {
+              "keyName": "user_sub",
+              "keyValue": "={{ $('Validate interest').first().json.user_sub }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4739af56-7f11-48eb-8757-53146d98813c",
+      "position": [
+        1680,
+        192
+      ]
+    },
+    {
+      "name": "Respond 204",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 204
+        }
+      },
+      "id": "10e92437-1272-4adf-a8c5-67917c7f763c",
+      "position": [
+        1920,
+        192
+      ]
+    },
+    {
+      "name": "Respond error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Validate interest').first().json.body) }}",
+        "options": {
+          "responseCode": "={{ $('Validate interest').first().json.statusCode }}"
+        }
+      },
+      "id": "330a3bd0-92f7-4434-b398-2d4f7b223e9e",
+      "position": [
+        2160,
+        384
+      ]
+    },
+    {
+      "name": "Get pitch interest",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "rfdMCrRnPKnniv8o",
+          "mode": "list",
+          "cachedResultName": "pitch_interest",
+          "cachedResultUrl": "/projects/uAascgo7459L25P4/datatables/rfdMCrRnPKnniv8o"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "pitch_id",
+              "keyValue": "={{ $('POST /pitch-interest').first().json.body.pitchId }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "ccafe738-e5dc-466b-b063-fb2f2d557be1",
+      "position": [
+        360,
+        192
+      ]
+    },
+    {
+      "name": "Changed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "executeOnce": true,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9f19da90-d41d-4b12-8cd4-d63303c1cb7a",
+              "leftValue": "={{ $('Validate interest').first().json.changed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "539a8594-12e9-4b23-a615-41158b458f07",
+      "position": [
+        2160,
+        0
+      ]
+    },
+    {
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "6pNrfjbynQ4IXPM8",
+          "cachedResultName": "Slack Bot Notifier"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "={{ $('Validate interest').first().json.interested ? 'interest_added' : 'interest_removed' }}",
+            "pitchId": "={{ $('Validate interest').first().json.pitch_id }}",
+            "workationId": "",
+            "actorSub": "={{ $('Validate interest').first().json.user_sub }}",
+            "promoteSub": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pitchId",
+              "displayName": "pitchId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workationId",
+              "displayName": "workationId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actorSub",
+              "displayName": "actorSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "promoteSub",
+              "displayName": "promoteSub",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "2c2ed5f9-9caf-4996-8805-1d8746a2763b",
+      "position": [
+        2400,
+        0
+      ],
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "POST /pitch-interest": {
+      "main": [
+        [
+          {
+            "node": "Get pitch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get pitch": {
+      "main": [
+        [
+          {
+            "node": "Get pitch interest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate interest": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "Interested?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interested?": {
+      "main": [
+        [
+          {
+            "node": "Upsert interest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete interest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert interest": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete interest": {
+      "main": [
+        [
+          {
+            "node": "Respond 204",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get pitch interest": {
+      "main": [
+        [
+          {
+            "node": "Validate interest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200": {
+      "main": [
+        [
+          {
+            "node": "Changed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 204": {
+      "main": [
+        [
+          {
+            "node": "Changed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Changed?": {
+      "main": [
+        [
+          {
+            "node": "Notify Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "NQAi3FG6eVyC716s"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
