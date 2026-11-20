@@ -1148,6 +1148,9 @@ function showEditTexts(root: HTMLElement, v: FormView): void {
   v.submit.textContent = v.reopening ? "Reopen pitch" : "Save changes";
   /* The questions are for deciding what to pitch, already done here. */
   requireEl(root, "[data-pitch-guide]").hidden = true;
+  /* The organizer accepted the guidelines when they first pitched. Removed
+     rather than hidden: a hidden required checkbox still blocks the submit. */
+  requireEl(root, "[data-pitch-accept]").remove();
 }
 
 export function mountPitchForm(root: HTMLElement): void {

@@ -102,7 +102,8 @@ li {
 :root:not([data-view="vote"]) [data-only="vote"],
 :root:not([data-view="detail"]) [data-only="detail"],
 :root:not([data-view="me"]) [data-only="me"],
-:root:not([data-view="pitch"]) [data-only="pitch"] {
+:root:not([data-view="pitch"]) [data-only="pitch"],
+:root:not([data-view="guidelines"]) [data-only="guidelines"] {
   display: none;
 }
 
@@ -1210,16 +1211,6 @@ li {
 
 .expectations li + li {
   margin-top: var(--space-16);
-}
-
-/* The "organized by employees, not sponsored" disclaimer. A side note
-   rather than a fourth point, so it sits under a divider. body-md */
-.about-copy .about-note {
-  margin-top: var(--space-32);
-  padding-top: var(--space-24);
-  border-top: 1px solid var(--stroke-secondary);
-  font-size: 14px;
-  line-height: 18px;
 }
 
 .expectations strong {
@@ -2622,6 +2613,112 @@ footer > span {
 
 .pitch-page .form-status {
   max-width: 720px;
+}
+
+/* Accepting the guidelines, above the submit button. A row rather than a
+   .field: the box sits beside its label, and .field inputs are full width.
+   body-lg, like the field values. */
+.field-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+/* Core Black, not pink: the tick sits on the light form background, where
+   pink fails contrast (2.03:1). */
+.field-check input {
+  flex-shrink: 0;
+  width: var(--space-16);
+  height: var(--space-16);
+  margin: var(--space-4) 0 0;
+  accent-color: var(--type-primary);
+}
+
+.field-check input:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.field-check a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* Read by screen readers, never shown, e.g. "(opens in a new tab)". */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ----------------------------------------------------------------
+   Guidelines, /guidelines
+
+   Running text from GET /guidelines in one readable column, spaced like
+   the pitch page it is linked from.
+   ---------------------------------------------------------------- */
+
+.guidelines-page {
+  padding: var(--space-32) 0 var(--space-64);
+}
+
+.guidelines-page .detail-section-intro {
+  margin-top: var(--space-16);
+}
+
+/* body-lg */
+.guidelines-sections,
+.guidelines-closing {
+  max-width: 720px;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.guidelines-section {
+  margin-top: var(--space-48);
+}
+
+/* heading-sm */
+.guidelines-section h2 {
+  font-size: 28px;
+  line-height: 32px;
+}
+
+.guidelines-section h2 + *,
+.guidelines-section > * + * {
+  margin-top: var(--space-16);
+}
+
+.guidelines-section ul,
+.guidelines-section ol {
+  display: grid;
+  gap: var(--space-8);
+  margin-bottom: 0;
+  padding-left: var(--space-24);
+}
+
+.guidelines-section li ul {
+  margin-top: var(--space-8);
+}
+
+.guidelines-section strong {
+  font-weight: var(--weight-medium);
+}
+
+.guidelines-closing {
+  margin-top: var(--space-48);
+  padding-top: var(--space-24);
+  border-top: 1px solid var(--stroke-secondary);
+  color: var(--type-secondary);
+}
+
+.guidelines-closing[hidden] {
+  display: none;
 }
 
 /* ----------------------------------------------------------------

@@ -19,7 +19,7 @@
       href="%BASE_URL%n8n-symbol-accent.svg"
     />
     <!-- This one file serves every view (/, /workations, /vote,
-         /n8ncation/<slug>, /pitch and /me): every unknown path
+         /n8ncation/<slug>, /pitch, /me and /guidelines): every unknown path
          falls back to index.html (Vite's default SPA fallback in dev and
          preview, and what any future host has to be configured to do), so
          there is no rewrite rule to keep in step between environments.
@@ -50,6 +50,7 @@
           "/pitches": "workations",
           "/pitch": "pitch",
           "/me": "me",
+          "/guidelines": "guidelines",
         };
         var key = path.length > 1 ? path.replace(/\/$/, "") : path;
         /* A trip's page (/n8ncation/<slug>) and a pitch's page
@@ -80,6 +81,9 @@
     <a class="skip" href="#pitch" data-only="pitch" data-private
       >Skip to the pitch form</a
     >
+    <a class="skip" href="#guidelines" data-only="guidelines" data-private
+      >Skip to the guidelines</a
+    >
     <header class="header">
       <a class="brand" href="%BASE_URL%" aria-label="n8ncation home"
         ><img
@@ -96,7 +100,10 @@
         <a href="%BASE_URL%" data-nav="home">About</a
         ><a href="%BASE_URL%workations" data-nav="workations" data-private
           >Workations</a
-        ><a href="%BASE_URL%vote" data-nav="vote" data-private>Vote</a>
+        ><a href="%BASE_URL%vote" data-nav="vote" data-private>Vote</a
+        ><a href="%BASE_URL%guidelines" data-nav="guidelines" data-private
+          >Guidelines</a
+        >
       </nav>
       <div class="auth" data-auth></div>
     </header>
@@ -763,6 +770,24 @@
                 when you add a photo.
               </p>
             </div>
+            <!-- New pitches only: showEditTexts() in src/features/pitches.ts
+                 removes it when editing or reopening. Never sent to n8n: it
+                 has no name, and readPitch() reads named fields only. The
+                 link opens a new tab, so the form keeps what's typed. -->
+            <div class="field-check field-wide" data-pitch-accept>
+              <input id="pitch-accept" type="checkbox" required />
+              <label for="pitch-accept"
+                >I have read and accept the
+                <a
+                  href="%BASE_URL%guidelines"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >People Ops guidelines<span class="visually-hidden">
+                    (opens in a new tab)</span
+                  ></a
+                >.</label
+              >
+            </div>
             <div class="form-actions field-wide">
               <a
                 class="auth-button auth-button-quiet"
@@ -932,12 +957,33 @@
               vibrant new setting that creates unforgettable memories.
             </li>
           </ul>
-          <p class="about-note">
-            n8ncations are organized by n8n employees, for n8n employees. They
-            aren’t sponsored by n8n directly, at least not yet 😉 They also
-            aren’t covered by n8n’s travel insurance, so check that your own
-            insurance covers the trip.
-          </p>
+        </div>
+      </section>
+      <!-- /guidelines. Filled by mountGuidelines() in
+           src/features/guidelines.ts from GET /guidelines. The text lives on
+           the n8n instance, not in this repo: it is internal policy, and this
+           file ships to every visitor. The body stays hidden until that
+           request succeeds, which is also this view's session check. -->
+      <section
+        class="guidelines-page wrap"
+        id="guidelines"
+        data-guidelines
+        data-only="guidelines"
+        data-private
+        aria-labelledby="guidelines-title"
+      >
+        <p class="trip-state" data-guidelines-state role="status">
+          Loading the guidelines…
+        </p>
+        <div data-guidelines-body hidden>
+          <h1
+            class="page-title"
+            id="guidelines-title"
+            data-guidelines-title
+          ></h1>
+          <p class="detail-section-intro" data-guidelines-intro></p>
+          <div class="guidelines-sections" data-guidelines-sections></div>
+          <p class="guidelines-closing" data-guidelines-closing></p>
         </div>
       </section>
       <section

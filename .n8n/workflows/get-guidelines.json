@@ -1,0 +1,82 @@
+{
+  "name": "/guidelines",
+  "nodes": [
+    {
+      "name": "GET /guidelines",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "9f81ae8a-b5a1-4111-9ce9-3a7f183c9781",
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "guidelines",
+        "authentication": "jwtAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "jwtAuth": {
+          "id": "EF3FVWn29g6p0qdG",
+          "name": "JWT Auth account"
+        }
+      },
+      "id": "f82f2451-aab8-4254-9d5f-e9628d064632",
+      "position": [0, 0]
+    },
+    {
+      "name": "Guidelines",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// PLACEHOLDER TEXT. The live node holds the real People Ops guidelines,\n// which are internal and never committed to this public repo.\n// Shape: GuidelinesResponse in src/api/types.ts.\nreturn [\n  {\n    json: {\n      title: \"Example guidelines\",\n      intro: \"Placeholder text. The live workflow holds the real guidelines.\",\n      sections: [\n        {\n          heading: \"Where you can go\",\n          blocks: [\n            {\n              type: \"list\",\n              ordered: false,\n              items: [\n                { lead: \"Region A:\", text: \"Allowed.\", items: [] },\n                { lead: \"Region B:\", text: \"Needs approval before you pitch or book.\", items: [] },\n                { lead: \"Not allowed:\", text: \"\", items: [\"Example Country\", \"Another Example Country\"] },\n              ],\n            },\n            { type: \"paragraph\", text: \"Approvals are per person and per trip.\" },\n          ],\n        },\n        {\n          heading: \"How to get approved\",\n          blocks: [\n            {\n              type: \"list\",\n              ordered: true,\n              items: [\n                { lead: \"\", text: \"Check the destination.\", items: [] },\n                { lead: \"\", text: \"Ask for approval before you book.\", items: [] },\n                { lead: \"\", text: \"Only then book.\", items: [] },\n              ],\n            },\n          ],\n        },\n      ],\n      closing: \"Questions? Ask in the workations Slack channel.\",\n    },\n  },\n];"
+      },
+      "id": "cf571754-8920-4b76-a4b2-cedbe7321059",
+      "position": [224, 0]
+    },
+    {
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "b1354259-7316-4b49-bd8c-66cd66aeecbc",
+      "position": [448, 0]
+    }
+  ],
+  "connections": {
+    "GET /guidelines": {
+      "main": [
+        [
+          {
+            "node": "Guidelines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guidelines": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "NQAi3FG6eVyC716s"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

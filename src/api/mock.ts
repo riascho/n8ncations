@@ -5,6 +5,7 @@
 
 import { ApiError } from "./types";
 import type {
+  GuidelinesResponse,
   Logistics,
   LogisticsResponse,
   Me,
@@ -658,6 +659,60 @@ export function getMe(): Promise<Me> {
     organizing: workationRows
       .filter((row) => row.organizerSub === user.sub)
       .map((row) => row.workationId),
+  });
+}
+
+/* Placeholder text in the real shape, using every kind of block. The real
+   guidelines are internal policy and live only on the n8n instance. */
+export function getGuidelines(): Promise<GuidelinesResponse> {
+  requireUser();
+  return delay({
+    title: "Example guidelines",
+    intro:
+      "Mock mode only. The real guidelines come from GET /guidelines on the n8n instance.",
+    sections: [
+      {
+        heading: "Where you can go",
+        blocks: [
+          {
+            type: "list",
+            ordered: false,
+            items: [
+              { lead: "Region A:", text: "Allowed.", items: [] },
+              {
+                lead: "Region B:",
+                text: "Needs approval before you pitch or book.",
+                items: [],
+              },
+              {
+                lead: "Not allowed:",
+                text: "",
+                items: ["Example Country", "Another Example Country"],
+              },
+            ],
+          },
+          {
+            type: "paragraph",
+            text: "Approvals are per person and per trip.",
+          },
+        ],
+      },
+      {
+        heading: "How to get approved",
+        blocks: [
+          {
+            type: "list",
+            ordered: true,
+            items: [
+              { lead: "", text: "Check the destination.", items: [] },
+              { lead: "", text: "Ask for approval before you book.", items: [] },
+              { lead: "", text: "Only then book.", items: [] },
+            ],
+          },
+        ],
+      },
+    ],
+    closing: "Questions? Ask in the workations Slack channel.",
   });
 }
 

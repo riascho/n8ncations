@@ -306,6 +306,34 @@ export interface ProfileUpdate {
   jobTitle: string | null;
 }
 
+/** GET /guidelines: the People Ops rules for n8ncations, shown on
+    /guidelines and accepted before pitching. Served by n8n rather than kept
+    in this repo, because it is internal policy and the repo is public. */
+export interface GuidelinesResponse {
+  title: string;
+  intro: string;
+  sections: GuidelineSection[];
+  /** The last line, such as who to ask. `""` for none. */
+  closing: string;
+}
+
+export interface GuidelineSection {
+  heading: string;
+  blocks: GuidelineBlock[];
+}
+
+export type GuidelineBlock =
+  | { type: "paragraph"; text: string }
+  | { type: "list"; ordered: boolean; items: GuidelineItem[] };
+
+export interface GuidelineItem {
+  /** Set in bold before `text`, such as "UK:". `""` for none. */
+  lead: string;
+  text: string;
+  /** A nested list under this item, `[]` for none. */
+  items: string[];
+}
+
 /** Thrown for any non-2xx response. `status` 401/403 means re-authenticate. */
 export class ApiError extends Error {
   readonly status: number;

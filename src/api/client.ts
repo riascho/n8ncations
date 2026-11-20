@@ -6,6 +6,7 @@
 
 import { ApiError } from "./types";
 import type {
+  GuidelinesResponse,
   Logistics,
   LogisticsResponse,
   Me,
@@ -118,6 +119,12 @@ export function getWorkations(): Promise<WorkationsResponse> {
 
 export function getMe(): Promise<Me> {
   return usingMock ? mock.getMe() : request<Me>("/me", {}, true);
+}
+
+export function getGuidelines(): Promise<GuidelinesResponse> {
+  return usingMock
+    ? mock.getGuidelines()
+    : request<GuidelinesResponse>("/guidelines", {}, true);
 }
 
 /* `attending` carries both directions rather than having a separate cancel

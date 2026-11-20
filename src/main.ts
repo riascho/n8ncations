@@ -12,6 +12,7 @@ import {
   signOut,
   takeReturnPath,
 } from "./auth";
+import { mountGuidelines } from "./features/guidelines";
 import { mountInvolved } from "./features/involved";
 import { mountLogistics, showLogistics } from "./features/logistics";
 import {
@@ -503,6 +504,15 @@ function mountView(): void {
     const pitch = el("[data-pitch-page]");
     if (pitch) {
       mountPitchForm(pitch);
+    }
+    return;
+  }
+
+  if (view === "guidelines") {
+    document.title = "Guidelines — n8ncation";
+    const guidelines = el("[data-guidelines]");
+    if (guidelines) {
+      void mountGuidelines(guidelines);
     }
     return;
   }
