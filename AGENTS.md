@@ -1,6 +1,6 @@
 # AGENTS.md
 
-n8ncations is an internal site for planning n8n team workations. The frontend in this repo is a static Vite + TypeScript site with no framework. The backend is n8n workflows backed by n8n Data Tables. Those workflows run on the n8n instance, not from this repo. README.md documents the architecture and the API contract; `.n8n/` documents the backend: how each workflow behaves, the Data Tables, and importable workflow blueprints (`.n8n/workflows/`). Read both before making non-trivial changes.
+n8ncations is an internal site for planning n8n team workations. The frontend in this repo is a static Vite + TypeScript site with no framework. The backend is n8n workflows backed by n8n Data Tables. Those workflows run on the n8n instance, not from this repo. README.md documents the architecture and the API contract; `.n8n/` documents the backend: how each workflow behaves, the Data Tables, and importable workflow blueprints (`.n8n/workflows/`). Read both before making non-trivial changes. CONTRIBUTION.md covers human onboarding (access, MCP setup, pull requests); the rules for agents stay in this file.
 
 ## Commands
 

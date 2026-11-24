@@ -28,7 +28,7 @@ No secret is stored in this folder. The blueprints refer to credentials by id on
 | `/me`              | `9oGsnUIed25uuZ2A` | `GET` + `POST /me`                  | [`me.json`](workflows/me.json)                                   | Live                                |
 | `/rsvp`            | `mr9xDlSpcKpYGI3P` | `POST /rsvp`                        | [`rsvp.json`](workflows/rsvp.json)                               | Live. Accommodation and cost fields since 2026-10-28, untested with a real session |
 | `/polls`           | `ozitA0kxZ9TeMgey` | `GET /polls`                        | [`get-polls.json`](workflows/get-polls.json)                     | Live                                |
-| `/guidelines`      | `SB3wlKpha0qI8OI4` | `GET /guidelines`                   | [`get-guidelines.json`](workflows/get-guidelines.json)           | Live and published since 2026-11-20. Without a token it answers 401. Dry-run with `test_workflow` (1096). Untested with a real session. The live "Guidelines" node holds the real text; the blueprint holds placeholder text |
+| `/guidelines`      | `SB3wlKpha0qI8OI4` | `GET /guidelines`                   | [`get-guidelines.json`](workflows/get-guidelines.json)           | Live and published since 2026-11-20. Without a token it answers 401. 2026-11-24: the text moved from the "Guidelines" node into the `guidelines` Data Table, read by "Get Guidelines Rows"; live and published, confirmed by a real execution (1136). The blueprint matches the live workflow; the text is only in the table |
 | `/vote`            | `xHEHDmxcWdJ7l8XN` | `POST /vote`                        | [`post-vote.json`](workflows/post-vote.json)                     | Live                                |
 | `/poll-option`     | `QUIiRzwKYN5nyRE3` | `POST /poll-option`                 | [`post-poll-option.json`](workflows/post-poll-option.json)       | Live                                |
 | Google OAuth Login | `H9fvloDql5H5lJC3` | `GET /n8ncations/callback`          | [`google-oauth-login.json`](workflows/google-oauth-login.json)   | Live                                |
@@ -78,7 +78,7 @@ Check before activating:
   `photosUrl` is `drive_folder_url` once `drive_domain_shared` is true (set by "Trip Drive Folders" the morning after the trip ends, when everyone at n8n.io can open the folder), `""` otherwise.
 - **`GET /trip-photos`** answers `404 { message }` unless the trip has a `drive_folder_id` and `drive_domain_shared` is true: the same rule as `photosUrl`, so the site only asks for trips that have one. Any signed-in colleague can call it, matching the folder's n8n.io permission. "List photos" asks the Drive API for the eight most recently uploaded images in the folder, newest first (`'<id>' in parents and trashed = false and mimeType contains 'image/'`, `orderBy=createdTime desc`, with `thumbnailLink`). New uploads show up right away; once there are more than eight, the oldest drop off. "Fetch thumbnail" downloads each one 1600px wide (the link's `=s220` suffix becomes `=w1600`: a width rather than the longest side, so portrait photos also fill the trip page's photo, which is up to 1160px wide) with the `Google Drive` credential, and continues on error, so a broken thumbnail is skipped rather than failing the response. "Build photos" returns `{ photos: [{ src: "data:image/…;base64,…" }] }`, an estimated 250 to 500 KB per landscape photo (more for portrait), so up to a few MB per response. An empty folder answers `{ photos: [] }`. Every answer carries `Cache-Control: private, max-age=3600`, so a browser can take up to an hour to see new uploads. The browser only sends a `workationId`, never a Drive file id, so the route can't be used to read other files in the Drive account.
 - **`GET /polls`** keeps only the newest vote row per (poll, user) by `updatedAt`, in case a race created duplicates. `voters` counts people with at least one selection. `suggested` is true for any option not seeded (`created_by_sub !== "seed"`).
-- **`GET /guidelines`** reads no table. The "Guidelines" Code node returns the People Ops rules for n8ncations as a `GuidelinesResponse` (see `src/api/types.ts`), and "Respond 200" sends it. The text is internal policy, so it lives only in the live node: the blueprint's node holds placeholder text in the same shape, and is the one place where a blueprint deliberately differs from the live workflow. To change the guidelines, edit the live node's text and keep the shape. When restoring the workflow from the blueprint, paste the real text back into the node.
+- **`GET /guidelines`** returns the People Ops rules for n8ncations as a `GuidelinesResponse` (see `src/api/types.ts`). "Get Guidelines Rows" reads the `guidelines` rows with `active` true, sorted by `position`, and keeps going on an empty table (_Always Output Data_). The "Guidelines" Code node turns them into the response, one row per line, by `kind`: `title`, `intro` and `closing` set those fields; `heading` starts a section; `paragraph` adds a paragraph; consecutive `bullet` or `numbered` rows form one list (`lead` in bold before `text`); a `sub_bullet` nests under the bullet before it, or becomes a plain bullet when there's none. Unknown kinds are ignored, and sections left without content are dropped. "Respond 200" sends it. The text is internal policy, so it lives only in the table, never in this repo: to change the guidelines, edit, reorder or deactivate rows in `guidelines`, not the workflow.
 - **`GET /me` / `POST /me`** share one webhook with _Allow Multiple HTTP Methods_. GET reads the caller's profile, signups and votes. `signups` lists the trips where the caller's row has `status = going`. `waitlist` lists those with `status = waitlist`, with `position` = 1 + the number of waitlist rows for that trip with an older `createdAt`. `organizing` lists the `workation_id`s whose `organizer` is the caller's sub. POST updates only `team` and `jobTitle`; name, email and picture are rewritten from Google on every sign-in.
 - **`POST /rsvp`** checks that the trip exists and that today is on or before its `end_date`, like the frontend's `isPast()`.
   - `attending: true`: if the caller already has a row, it answers with that row's status. Otherwise it inserts a row with `status = going` while `capacity` is empty or the going count is below it, and `status = waitlist` after that. It answers `200 { status, position }`.
@@ -158,7 +158,7 @@ The site has no deposit tracking. The messages only ask organizers to collect de
 
 ## Data Tables
 
-Eight n8n Data Tables. Every table also has the system columns `id`, `createdAt` and `updatedAt`. There are no unique constraints, so the "one row per …" rules below are enforced by the workflows' upserts. `user_sub` is always the Google account's `sub` claim.
+Nine n8n Data Tables. Every table also has the system columns `id`, `createdAt` and `updatedAt`. There are no unique constraints, so the "one row per …" rules below are enforced by the workflows' upserts. `user_sub` is always the Google account's `sub` claim.
 
 **Dates are always String columns, never Date columns.** Calendar days are stored as `YYYY-MM-DD` and date-times as `YYYY-MM-DDTHH:MM` (destination time, no timezone). That is exactly what the browser's date inputs produce and what the API sends, so workflows store and return them unchanged. The format also sorts and compares correctly as plain text: to check a date against today, compare it with `$today.toFormat('yyyy-MM-dd')`. The frontend rejects any other format and shows "Dates to be confirmed".
 
@@ -265,6 +265,18 @@ Only the owner (through `/logistics`) and the trip's organizer (through `/roster
 | `created_by_sub` | string | `seed` for built-in options, otherwise the suggester's `user_sub` |
 
 Seeded today: the twelve months for `month`, and a few countries for `location`.
+
+### `guidelines`: one row per line of the People Ops guidelines (edited by hand)
+
+Read by `GET /guidelines`. The text is internal policy: edit it in the table, and never copy rows into this repo.
+
+| Column     | Type    | Notes                                                                                                   |
+| ---------- | ------- | ------------------------------------------------------------------------------------------------------- |
+| `position` | number  | Order on the page, ascending. Leave gaps (10, 20, …) so rows can be inserted between others            |
+| `kind`     | string  | `title`, `intro`, `heading`, `paragraph`, `bullet`, `numbered`, `sub_bullet` or `closing`               |
+| `lead`     | string  | Bold text before `text` on a `bullet` or `numbered` row. Empty for none                                 |
+| `text`     | string  | The line itself                                                                                         |
+| `active`   | boolean | Only `true` rows are sent, so a line can be hidden without deleting it                                  |
 
 ```
 profiles.user_sub ◀── signups.user_sub
