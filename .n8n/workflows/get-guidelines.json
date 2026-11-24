@@ -7,7 +7,6 @@
       "typeVersion": 2.1,
       "webhookId": "9f81ae8a-b5a1-4111-9ce9-3a7f183c9781",
       "parameters": {
-        "httpMethod": "GET",
         "path": "guidelines",
         "authentication": "jwtAuth",
         "responseMode": "responseNode",
@@ -23,16 +22,44 @@
       "position": [0, 0]
     },
     {
+      "name": "Get Guidelines Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gfc8jHgPeVvNxpai",
+          "cachedResultName": "guidelines"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "active",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "returnAll": true,
+        "orderBy": true,
+        "orderByColumn": "position",
+        "orderByDirection": "ASC"
+      },
+      "id": "5a726e7a-e767-4d04-80a3-8aa01978f9d9",
+      "position": [224, 0]
+    },
+    {
       "name": "Guidelines",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "// PLACEHOLDER TEXT. The live node holds the real People Ops guidelines,\n// which are internal and never committed to this public repo.\n// Shape: GuidelinesResponse in src/api/types.ts.\nreturn [\n  {\n    json: {\n      title: \"Example guidelines\",\n      intro: \"Placeholder text. The live workflow holds the real guidelines.\",\n      sections: [\n        {\n          heading: \"Where you can go\",\n          blocks: [\n            {\n              type: \"list\",\n              ordered: false,\n              items: [\n                { lead: \"Region A:\", text: \"Allowed.\", items: [] },\n                { lead: \"Region B:\", text: \"Needs approval before you pitch or book.\", items: [] },\n                { lead: \"Not allowed:\", text: \"\", items: [\"Example Country\", \"Another Example Country\"] },\n              ],\n            },\n            { type: \"paragraph\", text: \"Approvals are per person and per trip.\" },\n          ],\n        },\n        {\n          heading: \"How to get approved\",\n          blocks: [\n            {\n              type: \"list\",\n              ordered: true,\n              items: [\n                { lead: \"\", text: \"Check the destination.\", items: [] },\n                { lead: \"\", text: \"Ask for approval before you book.\", items: [] },\n                { lead: \"\", text: \"Only then book.\", items: [] },\n              ],\n            },\n          ],\n        },\n      ],\n      closing: \"Questions? Ask in the workations Slack channel.\",\n    },\n  },\n];"
+        "jsCode": "// Builds the GuidelinesResponse (shape: src/api/types.ts) from the \"guidelines\" data table.\n// Edit the content in the data table, not here. Internal text: never copy it into the public repo.\n// One row per line, sorted by position. kind values:\n// title | intro | heading | paragraph | bullet | numbered | sub_bullet | closing\nconst clean = (v) => (v === null || v === undefined ? '' : String(v).trim());\n\nconst rows = $input\n  .all()\n  .map((i) => i.json)\n  .filter((r) => r && Object.keys(r).length > 0 && r.active !== false)\n  .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));\n\nconst out = { title: '', intro: '', sections: [], closing: '' };\nlet section = null; // current section\nlet list = null; // current list block\nlet lastItem = null; // last bullet or numbered item (parent for sub_bullets)\n\nconst ensureSection = () => {\n  if (!section) {\n    section = { heading: '', blocks: [] };\n    out.sections.push(section);\n  }\n  return section;\n};\nconst endList = () => {\n  list = null;\n  lastItem = null;\n};\nconst startList = (ordered) => {\n  list = { type: 'list', ordered, items: [] };\n  ensureSection().blocks.push(list);\n};\n\nfor (const r of rows) {\n  const kind = clean(r.kind).toLowerCase();\n  const lead = clean(r.lead);\n  const text = clean(r.text);\n\n  if (kind === 'title') out.title = text;\n  else if (kind === 'intro') out.intro = text;\n  else if (kind === 'closing') out.closing = text;\n  else if (kind === 'heading') {\n    section = { heading: text, blocks: [] };\n    out.sections.push(section);\n    endList();\n  } else if (kind === 'paragraph') {\n    if (!text) continue;\n    ensureSection().blocks.push({ type: 'paragraph', text });\n    endList();\n  } else if (kind === 'bullet' || kind === 'numbered') {\n    if (!lead && !text) continue;\n    const ordered = kind === 'numbered';\n    if (!list || list.ordered !== ordered) startList(ordered);\n    lastItem = { lead, text, items: [] };\n    list.items.push(lastItem);\n  } else if (kind === 'sub_bullet') {\n    if (!text) continue;\n    if (lastItem) {\n      lastItem.items.push(text);\n    } else {\n      // Parent bullet missing (e.g. deleted): show it as a normal bullet instead.\n      if (!list || list.ordered) startList(false);\n      list.items.push({ lead: '', text, items: [] });\n    }\n  }\n  // Unknown kinds are ignored.\n}\n\n// Leave out sections that ended up with no content.\nout.sections = out.sections.filter((s) => s.blocks.length > 0);\n\nreturn [{ json: out }];"
       },
       "id": "cf571754-8920-4b76-a4b2-cedbe7321059",
-      "position": [224, 0]
+      "position": [448, 0]
     },
     {
       "name": "Respond 200",
@@ -44,11 +71,22 @@
         }
       },
       "id": "b1354259-7316-4b49-bd8c-66cd66aeecbc",
-      "position": [448, 0]
+      "position": [672, 0]
     }
   ],
   "connections": {
     "GET /guidelines": {
+      "main": [
+        [
+          {
+            "node": "Get Guidelines Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Guidelines Rows": {
       "main": [
         [
           {
